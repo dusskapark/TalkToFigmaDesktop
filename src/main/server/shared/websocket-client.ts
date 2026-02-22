@@ -203,10 +203,10 @@ export class WebSocketClient {
       transformedParams = {
         nodeId: params.nodeId,
         color: {
-          r: params.r,
-          g: params.g,
-          b: params.b,
-          a: params.a ?? 1,
+          r: Number(params.r),
+          g: Number(params.g),
+          b: Number(params.b),
+          a: Number(params.a ?? 1),
         },
       };
     } else if (command === 'set_stroke_color' && 'r' in params && 'g' in params && 'b' in params) {
@@ -214,12 +214,17 @@ export class WebSocketClient {
       transformedParams = {
         nodeId: params.nodeId,
         color: {
-          r: params.r,
-          g: params.g,
-          b: params.b,
-          a: params.a ?? 1,
+          r: Number(params.r),
+          g: Number(params.g),
+          b: Number(params.b),
+          a: Number(params.a ?? 1),
         },
-        weight: params.weight ?? 1,
+        weight: Number(params.weight ?? 1),
+      };
+    } else if (command === 'set_corner_radius' && 'radius' in params) {
+      transformedParams = {
+        ...params,
+        radius: Number(params.radius),
       };
     }
 
