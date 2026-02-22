@@ -46,9 +46,9 @@ export function initializeUpdater() {
   log.info('Current version:', app.getVersion());
 
   // Construct feed URL for update.electronjs.org
-  // For macOS universal builds, use 'darwin-universal'
+  // GitHub Releases ship darwin-universal builds only, so always use 'darwin-universal' on macOS.
   const platform = process.platform === 'darwin'
-    ? `darwin-${process.arch}`
+    ? 'darwin-universal'
     : `${process.platform}-${process.arch}`;
   const feedURL = `https://update.electronjs.org/grab/TalkToFigmaDesktop/${platform}/${app.getVersion()}`;
   const userAgent = `TalkToFigma-Desktop/${app.getVersion()} (${process.platform}: ${process.arch})`;
