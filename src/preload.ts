@@ -88,6 +88,7 @@ const electronAPI: ElectronAPI = {
 
   update: {
     check: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_CHECK),
+    getCapabilities: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_GET_CAPABILITIES),
   },
 
   sse: {

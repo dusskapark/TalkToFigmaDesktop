@@ -20,6 +20,7 @@ import { createLogger } from '../utils/logger';
 import { TalkToFigmaServerManager } from './TalkToFigmaServerManager';
 import { TalkToFigmaService } from './TalkToFigmaService';
 import { checkForUpdates } from '../utils/updater';
+import { getUpdateCapabilities } from '../utils/distribution';
 
 const logger = createLogger('Tray');
 
@@ -110,6 +111,7 @@ export class TalkToFigmaTray {
   private buildMenu(): Menu {
     const status = this.manager.getStatus();
     const wsRunning = status.websocket.running;
+    const { canCheckForUpdates } = getUpdateCapabilities();
 
     const template: Electron.MenuItemConstructorOptions[] = [
       // ═══ HEADER ═══
@@ -147,12 +149,15 @@ export class TalkToFigmaTray {
       },
       { type: 'separator' },
 
-      // ═══ UPDATE CHECK ═══
-      {
-        label: 'Check for Updates...',
-        click: () => checkForUpdates(true),
-      },
-      { type: 'separator' },
+      ...(canCheckForUpdates
+        ? [
+            {
+              label: 'Check for Updates...',
+              click: () => checkForUpdates(true),
+            },
+            { type: 'separator' as const },
+          ]
+        : []),
 
       // ═══ EXIT ═══
       {

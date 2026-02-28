@@ -3,6 +3,12 @@
 import type { ServerState } from './server';
 import type { FigmaAuthState, FigmaUser } from './figma';
 
+export interface UpdateCapabilities {
+  channel: 'direct' | 'mas' | 'msix';
+  canCheckForUpdates: boolean;
+  managedByStore: boolean;
+}
+
 // Events from Main to Renderer
 export interface MainToRendererEvents {
   'server:status-changed': ServerState;
@@ -50,6 +56,10 @@ export interface RendererToMainInvocations {
 
   // Shell
   'shell:open-external': (url: string) => Promise<void>;
+
+  // Updates
+  'update:check': () => Promise<void>;
+  'update:get-capabilities': () => Promise<UpdateCapabilities>;
 }
 
 // Log entry type
@@ -122,6 +132,7 @@ export interface ElectronAPI {
 
   update: {
     check: () => Promise<void>;
+    getCapabilities: () => Promise<UpdateCapabilities>;
   };
 
   sse: {

@@ -79,6 +79,7 @@ export const IPC_CHANNELS = {
 
   // Updates
   UPDATE_CHECK: 'update:check',
+  UPDATE_GET_CAPABILITIES: 'update:get-capabilities',
 
   // SSE migration detection
   SSE_CLIENT_DETECTED: 'sse:client-detected',

@@ -1,8 +1,34 @@
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { HelpCircle, ExternalLink, FileText, Github, BookOpen, MessageCircle, Download } from 'lucide-react'
 
 export function HelpPage() {
+    const [canCheckForUpdates, setCanCheckForUpdates] = useState(false)
+
+    useEffect(() => {
+        let active = true
+
+        const loadUpdateCapabilities = async () => {
+            try {
+                const capabilities = await window.electron?.update?.getCapabilities?.()
+                if (active) {
+                    setCanCheckForUpdates(capabilities?.canCheckForUpdates ?? false)
+                }
+            } catch {
+                if (active) {
+                    setCanCheckForUpdates(false)
+                }
+            }
+        }
+
+        void loadUpdateCapabilities()
+
+        return () => {
+            active = false
+        }
+    }, [])
+
     const openExternal = (url: string) => {
         window.electron?.shell?.openExternal?.(url)
     }
@@ -44,28 +70,29 @@ export function HelpPage() {
                 </CardContent>
             </Card>
 
-            {/* Updates */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Download className="size-5" />
-                        Updates
-                    </CardTitle>
-                    <CardDescription>
-                        Keep your app up to date with the latest features and fixes
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                    <Button
-                        variant="outline"
-                        className="w-full justify-start"
-                        onClick={checkForUpdates}
-                    >
-                        <Download className="size-4 mr-2" />
-                        Check for Updates
-                    </Button>
-                </CardContent>
-            </Card>
+            {canCheckForUpdates && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Download className="size-5" />
+                            Updates
+                        </CardTitle>
+                        <CardDescription>
+                            Keep your app up to date with the latest features and fixes
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        <Button
+                            variant="outline"
+                            className="w-full justify-start"
+                            onClick={checkForUpdates}
+                        >
+                            <Download className="size-4 mr-2" />
+                            Check for Updates
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Get Help */}
             <Card>

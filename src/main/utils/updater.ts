@@ -6,6 +6,7 @@
 
 import { autoUpdater, BrowserWindow, dialog, app } from 'electron';
 import log from 'electron-log';
+import { getUpdateCapabilities } from './distribution';
 
 // Configure logging
 log.transports.file.level = 'info';
@@ -35,10 +36,9 @@ export function initializeUpdater() {
     return;
   }
 
-  // App Store / TestFlight builds must not use Electron autoUpdater.
-  // Updates are managed by the App Store infrastructure.
-  if (process.mas || process.windowsStore) {
-    log.info('Auto-updater disabled for App Store/TestFlight/MSIX builds');
+  const { canCheckForUpdates, channel } = getUpdateCapabilities();
+  if (!canCheckForUpdates) {
+    log.info(`Auto-updater disabled for ${channel} distribution channel`);
     return;
   }
 
@@ -164,16 +164,9 @@ export function checkForUpdates(manual = false) {
     return;
   }
 
-  // MAS/TestFlight/MSIX: update checks are handled by app stores.
-  if (process.mas || process.windowsStore) {
-    log.info('Skipping update check for App Store/TestFlight/MSIX build');
-    if (manual) {
-      dialog.showMessageBox({
-        type: 'info',
-        title: 'Updates Managed by Store',
-        message: 'This build receives updates through the App Store or Microsoft Store.'
-      });
-    }
+  const { canCheckForUpdates, channel } = getUpdateCapabilities();
+  if (!canCheckForUpdates) {
+    log.info(`Skipping update check for ${channel} distribution channel`);
     return;
   }
 

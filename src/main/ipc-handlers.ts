@@ -8,10 +8,11 @@ import { ipcMain, BrowserWindow, shell, IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../shared/constants';
 import { createLogger } from './utils/logger';
 import * as storeUtils from './utils/store';
-import type { ServerState, FigmaAuthState } from '../shared/types';
+import type { ServerState, FigmaAuthState, UpdateCapabilities } from '../shared/types';
 import { registerMcpConfigHandlers } from './handlers/mcp-config-handler';
 import { trackTutorialAction, trackThemeChange, trackPageView, trackServerAction } from './analytics';
 import { checkForUpdates } from './utils/updater';
+import { getUpdateCapabilities } from './utils/distribution';
 import { TalkToFigmaService } from './server/TalkToFigmaService';
 
 const logger = createLogger('IPC');
@@ -214,6 +215,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC_CHANNELS.UPDATE_CHECK, async () => {
     logger.info('IPC: update:check');
     checkForUpdates(true);
+  });
+  ipcMain.handle(IPC_CHANNELS.UPDATE_GET_CAPABILITIES, async (): Promise<UpdateCapabilities> => {
+    logger.debug('IPC: update:get-capabilities');
+    return getUpdateCapabilities();
   });
 
   logger.info('IPC handlers registered successfully');

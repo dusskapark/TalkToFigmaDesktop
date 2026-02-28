@@ -6,6 +6,7 @@
 
 import { app, Menu, MenuItemConstructorOptions, shell, BrowserWindow } from 'electron';
 import { checkForUpdates } from './utils/updater';
+import { getUpdateCapabilities } from './utils/distribution';
 import { TalkToFigmaServerManager } from './server/TalkToFigmaServerManager';
 import { TalkToFigmaService } from './server/TalkToFigmaService';
 
@@ -15,6 +16,7 @@ import { TalkToFigmaService } from './server/TalkToFigmaService';
  */
 export function createMenu(mainWindow: BrowserWindow) {
   const isMac = process.platform === 'darwin';
+  const { canCheckForUpdates } = getUpdateCapabilities();
   const serverManager = TalkToFigmaServerManager.getInstance();
   const service = TalkToFigmaService.getInstance();
 
@@ -48,13 +50,17 @@ export function createMenu(mainWindow: BrowserWindow) {
           submenu: [
             { role: 'about' },
             { type: 'separator' },
-            {
-              label: 'Check for Updates...',
-              click: () => {
-                checkForUpdates(true);
-              }
-            },
-            { type: 'separator' },
+            ...(canCheckForUpdates
+              ? [
+                  {
+                    label: 'Check for Updates...',
+                    click: () => {
+                      checkForUpdates(true);
+                    }
+                  } as MenuItemConstructorOptions,
+                  { type: 'separator' as const },
+                ]
+              : []),
             { role: 'services' },
             { type: 'separator' },
             { role: 'hide' },
@@ -146,7 +152,7 @@ export function createMenu(mainWindow: BrowserWindow) {
       role: 'help',
       submenu: [
         // Windows/Linux: Add "Check for Updates" to Help menu
-        ...(!isMac
+        ...(!isMac && canCheckForUpdates
           ? [
               {
                 label: 'Check for Updates...',
