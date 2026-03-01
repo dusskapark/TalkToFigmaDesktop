@@ -12,7 +12,7 @@ import { initialize } from '@aptabase/electron/main';
 import { registerIpcHandlers, setAuthManager, emitToRenderer } from './main/ipc-handlers';
 import { createLogger, setMainWindow } from './main/utils/logger';
 import { TalkToFigmaService, TalkToFigmaServerManager, TalkToFigmaTray } from './main/server';
-import { trackAppStart, trackAppQuit, trackUserEngagement, trackFirstOpenIfNeeded, trackAppException, trackOAuthAction, APTABASE_APP_KEY } from './main/analytics';
+import { trackAppStart, trackAppQuit, trackUserEngagement, trackFirstOpenIfNeeded, trackAppException, trackOAuthAction, APTABASE_APP_KEY, flushMCPToolSuccessBatch } from './main/analytics';
 import { FigmaOAuthService } from './main/figma/oauth/FigmaOAuthService';
 import { FigmaApiClient } from './main/figma/api/FigmaApiClient';
 import { IPC_CHANNELS, STORE_KEYS } from './shared/constants';
@@ -371,6 +371,13 @@ app.on('activate', () => {
 app.on('before-quit', async () => {
   logger.info('App shutting down...');
 
+  // Flush buffered MCP success analytics before app shutdown.
+  try {
+    flushMCPToolSuccessBatch('app_quit');
+  } catch (error) {
+    logger.warn('Failed to flush MCP success batch on before-quit:', { error });
+  }
+
   // Track app quit
   trackAppQuit();
 
@@ -410,4 +417,13 @@ app.on('before-quit', async () => {
   tray?.destroy();
 
   logger.info('App shutdown complete');
+});
+
+app.on('will-quit', () => {
+  // Best-effort second flush in case before-quit flow was interrupted.
+  try {
+    flushMCPToolSuccessBatch('app_quit');
+  } catch (error) {
+    logger.warn('Failed to flush MCP success batch on will-quit:', { error });
+  }
 });

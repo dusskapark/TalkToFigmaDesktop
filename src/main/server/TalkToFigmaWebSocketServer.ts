@@ -49,6 +49,9 @@ export class TalkToFigmaWebSocketServer {
   private servicesInitialized = false;
   // Track pending requests for analytics (request ID -> command name)
   private pendingRequests: Map<string, { command: string; timestamp: number }> = new Map();
+  private pendingRequestCleanupInterval: NodeJS.Timeout | null = null;
+  private readonly PENDING_REQUEST_MAX_AGE_MS = 5 * 60 * 1000;
+  private readonly PENDING_REQUEST_CLEANUP_INTERVAL_MS = 10 * 1000;
 
   /**
    * Set callback to be called when client count changes
@@ -89,6 +92,7 @@ export class TalkToFigmaWebSocketServer {
         });
 
         this.wss.on('listening', () => {
+          this.startPendingRequestCleanup();
           this.addLog('INFO', `WebSocket server started on ws://127.0.0.1:${port}`);
           resolve();
         });
@@ -119,6 +123,8 @@ export class TalkToFigmaWebSocketServer {
    * Stop the WebSocket server
    */
   async stop(): Promise<void> {
+    this.stopPendingRequestCleanup();
+
     if (!this.wss) {
       logger.warn('[TalkToFigma WS] Server is not running');
       return;
@@ -146,6 +152,7 @@ export class TalkToFigmaWebSocketServer {
 
       // Clear channels
       this.channels.clear();
+      this.pendingRequests.clear();
 
       // Close the server
       this.wss!.close(() => {
@@ -258,6 +265,8 @@ export class TalkToFigmaWebSocketServer {
    * Handle incoming message from client
    */
   private handleMessage(ws: WebSocket, data: Buffer): void {
+    this.cleanupPendingRequests();
+
     try {
       const message = data.toString();
       this.addLog('DEBUG', `Received message: ${message.substring(0, 100)}`);
@@ -757,13 +766,28 @@ export class TalkToFigmaWebSocketServer {
    * Clean up old pending requests (older than 5 minutes)
    */
   private cleanupPendingRequests(): void {
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const now = Date.now();
     for (const [id, request] of this.pendingRequests) {
-      if (request.timestamp < fiveMinutesAgo) {
+      const elapsedMs = now - request.timestamp;
+      if (elapsedMs > this.PENDING_REQUEST_MAX_AGE_MS) {
+        trackMCPToolCall(request.command, false, 'Request timed out', elapsedMs);
         this.pendingRequests.delete(id);
       }
     }
   }
 
-}
+  private startPendingRequestCleanup(): void {
+    this.stopPendingRequestCleanup();
+    this.pendingRequestCleanupInterval = setInterval(() => {
+      this.cleanupPendingRequests();
+    }, this.PENDING_REQUEST_CLEANUP_INTERVAL_MS);
+  }
 
+  private stopPendingRequestCleanup(): void {
+    if (this.pendingRequestCleanupInterval) {
+      clearInterval(this.pendingRequestCleanupInterval);
+      this.pendingRequestCleanupInterval = null;
+    }
+  }
+
+}

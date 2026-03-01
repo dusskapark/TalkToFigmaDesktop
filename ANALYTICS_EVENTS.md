@@ -64,6 +64,21 @@ Triggered when an MCP tool is invoked.
 | success | boolean | Whether the tool call succeeded |
 | duration_ms | number | (optional) Time in ms from request received to response returned |
 | error_message | string | (optional) Error description if failed |
+| batched | boolean | (optional) `true` when this event contains a success batch |
+| batch_size | number | (optional) Number of successful tool calls included in the batch |
+| idle_window_sec | number | (optional) Idle window used before flushing successful calls (default 60) |
+| batch_reason | string | (optional) `idle_timeout` \| `before_failure` \| `app_quit` |
+| duration_total_ms | number | (optional) Sum of known durations in a batch |
+| batch_id | string | (optional) Batch identifier shared across chunked events |
+| batch_chunk_index | number | (optional) 1-based index when a batch is split into multiple events |
+| batch_chunk_count | number | (optional) Total number of chunked events for the batch |
+| `<tool_name>` | number | (optional) Dynamic property where key is tool name and value is accumulated duration in ms (example: `join_channel: 120`) |
+
+Notes:
+- Failed or timed-out tool calls are still tracked immediately with `success=false`.
+- Batched success events reuse the same event name and use `tool_name="__batch__"` for compatibility.
+- If a batch would exceed the configured property count, it is flushed as multiple chunked events (`batch_chunk_*`) with the same `batch_id`.
+- Dynamic tool keys are normalized to lowercase snake_case and capped at 40 chars; if two tools collide after normalization/truncation, suffixes (`_2`, `_3`, ...) are appended.
 
 ---
 
