@@ -83,6 +83,11 @@ export function McpClientItem({ client }: McpClientItemProps) {
       const quotedPath = stdioPath.includes(' ') ? `"${stdioPath}"` : stdioPath
       return `claude mcp add TalkToFigmaDesktop node ${quotedPath}`
     }
+    if (client.id === 'codex') {
+      // Codex requires `--` before the executable command.
+      const shellQuotedPath = `'${stdioPath.replace(/'/g, `'\\''`)}'`
+      return `codex mcp add TalkToFigmaDesktop -- node ${shellQuotedPath}`
+    }
     return client.cliCommand || ''
   }
 
@@ -110,8 +115,8 @@ export function McpClientItem({ client }: McpClientItemProps) {
         </>
       )}
 
-      {/* Claude Code */}
-      {client.id === 'claude-code' && (
+      {/* CLI Clients */}
+      {(client.id === 'claude-code' || client.id === 'codex') && (
         <>
           <div className="space-y-3">
             <ConfigCodeBlock config={getCliCommand()} />

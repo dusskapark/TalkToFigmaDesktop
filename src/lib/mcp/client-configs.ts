@@ -68,6 +68,23 @@ export const MCP_CLIENTS: Record<string, McpClient> = {
     ]
   },
 
+  codex: {
+    id: 'codex',
+    displayName: 'Codex CLI',
+    configFormat: 'cli',
+    serverName: 'TalkToFigmaDesktop',
+    installMethod: 'cli',
+    description: 'Use Codex CLI to install the MCP server',
+    cliCommand: 'codex mcp add TalkToFigmaDesktop -- node <STDIO_SERVER_PATH>',
+    instructions: [
+      'Copy the command above (server path is pre-filled)',
+      'Open your terminal',
+      'Paste and run the command',
+      'Use codex mcp list to verify TalkToFigmaDesktop is enabled',
+      'If a malformed entry exists, run codex mcp remove TalkToFigmaDesktop and add it again'
+    ]
+  },
+
   vscode: {
     id: 'vscode',
     displayName: 'VS Code',
@@ -144,7 +161,13 @@ export function getClientConfig(clientId: string): McpClient | undefined {
  * Get all client IDs (excluding coming soon)
  */
 export function getAllClientIds(): string[] {
-  return Object.keys(MCP_CLIENTS).filter(id => id !== 'comingSoon')
+  return Object.keys(MCP_CLIENTS)
+    .filter(id => id !== 'comingSoon')
+    .sort((a, b) => {
+      const nameA = MCP_CLIENTS[a]?.displayName ?? a
+      const nameB = MCP_CLIENTS[b]?.displayName ?? b
+      return nameA.localeCompare(nameB, 'en', { sensitivity: 'base' })
+    })
 }
 
 /**
