@@ -20,7 +20,7 @@ test:
     - apk add --no-cache git
   script:
     - npm ci --prefer-offline
-    - npm run lint -- --max-warnings=-1
+    - npm run lint
   cache:
     key: ${CI_COMMIT_REF_SLUG}-${NODE_VERSION}
     paths:
