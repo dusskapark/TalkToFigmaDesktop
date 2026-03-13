@@ -24,6 +24,7 @@ import { allPrompts, promptContents } from './prompts';
 import { allTools } from './tools';
 import { ServerStatus } from './TalkToFigmaWebSocketServer';
 import { isChannelNotRequired } from '../../shared/constants';
+import { BRANDING } from '../../shared/branding';
 
 const logger = createLogger('MCP');
 
@@ -91,7 +92,7 @@ export class TalkToFigmaMcpServer {
     // Create MCP server instance
     this.server = new Server(
       {
-        name: 'TalkToFigmaDesktop',
+        name: BRANDING.mcpServerName,
         version: '1.0.0',
       },
       {
@@ -367,7 +368,7 @@ export class TalkToFigmaMcpServer {
           prompts: {},
         },
         serverInfo: {
-          name: 'TalkToFigmaDesktop',
+          name: BRANDING.mcpServerName,
           version: '1.0.0',
         },
       };

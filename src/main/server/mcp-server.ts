@@ -4,6 +4,7 @@ import { createLogger } from '../utils/logger';
 import { PORTS, TIMEOUTS } from '../../shared/constants';
 import { getAllTools, initializeServices, ToolDefinition } from './services';
 import { FigmaWebSocketServer } from './websocket-server';
+import { BRANDING } from '../../shared/branding';
 
 const logger = createLogger('MCP');
 
@@ -309,7 +310,7 @@ export class McpSseServer {
     return {
       protocolVersion: '2024-11-05',
       serverInfo: {
-        name: 'TalkToFigmaDesktop',
+        name: BRANDING.mcpServerName,
         version: '1.0.0',
       },
       capabilities: {

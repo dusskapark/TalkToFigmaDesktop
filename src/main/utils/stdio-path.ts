@@ -9,6 +9,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { createLogger } from './logger';
 import { getInstalledServerPath, getInstallPaths } from './stdio-installer';
+import { BRANDING } from '@/shared/branding';
 
 const logger = createLogger('stdio');
 
@@ -83,7 +84,7 @@ export function getStdioServerConfig(): object {
 
   return {
     mcpServers: {
-      TalkToFigmaDesktop: {
+      [BRANDING.mcpServerName]: {
         command: 'node',
         args: [stdioServerPath]
       },

@@ -26,6 +26,7 @@ const logger = {
 import { allPrompts, promptContents } from './shared/prompt-registry';
 import { allTools } from './shared/tool-registry';
 import { WebSocketClient } from './shared/websocket-client';
+import { BRANDING } from '../../shared/branding';
 
 /**
  * MCP Server for stdio transport (spawned by MCP clients)
@@ -55,7 +56,7 @@ export class TalkToFigmaMcpServerStdio {
     // Create MCP server instance
     this.server = new Server(
       {
-        name: 'TalkToFigmaDesktop',
+        name: BRANDING.mcpServerName,
         version: '1.0.0',
       },
       {
@@ -137,7 +138,7 @@ export class TalkToFigmaMcpServerStdio {
           prompts: {},
         },
         serverInfo: {
-          name: 'TalkToFigmaDesktop',
+          name: BRANDING.mcpServerName,
           version: '1.0.0',
         },
       };

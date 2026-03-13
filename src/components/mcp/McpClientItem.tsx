@@ -12,6 +12,7 @@ import { ConfigCodeBlock } from './ConfigCodeBlock'
 import type { McpClient } from '@/lib/mcp/client-configs'
 import { formatClientConfig } from '@/lib/mcp/client-configs'
 import { useToast } from '@/hooks/use-toast'
+import { BRANDING } from '@/shared/branding'
 
 interface McpClientItemProps {
   client: McpClient
@@ -51,7 +52,7 @@ export function McpClientItem({ client }: McpClientItemProps) {
     const base64Config = btoa(configJson)
     console.log('Base64 Config:', base64Config)
 
-    const deepLink = `cursor://anysphere.cursor-deeplink/mcp/install?name=TalkToFigmaDesktop&config=${base64Config}`
+    const deepLink = `cursor://anysphere.cursor-deeplink/mcp/install?name=${BRANDING.mcpServerName}&config=${base64Config}`
     console.log('Full DeepLink:', deepLink)
 
     window.location.href = deepLink
@@ -66,7 +67,7 @@ export function McpClientItem({ client }: McpClientItemProps) {
     if (client.id === 'cursor' || client.id === 'vscode' || client.id === 'antigravity') {
       const config = {
         mcpServers: {
-          TalkToFigmaDesktop: {
+          [BRANDING.mcpServerName]: {
             command: 'node',
             args: [stdioPath]
           }
@@ -81,12 +82,12 @@ export function McpClientItem({ client }: McpClientItemProps) {
     if (client.id === 'claude-code') {
       // Wrap path in quotes if it contains spaces
       const quotedPath = stdioPath.includes(' ') ? `"${stdioPath}"` : stdioPath
-      return `claude mcp add TalkToFigmaDesktop node ${quotedPath}`
+      return `claude mcp add ${BRANDING.mcpServerName} node ${quotedPath}`
     }
     if (client.id === 'codex') {
       // Codex requires `--` before the executable command.
       const shellQuotedPath = `'${stdioPath.replace(/'/g, `'\\''`)}'`
-      return `codex mcp add TalkToFigmaDesktop -- node ${shellQuotedPath}`
+      return `codex mcp add ${BRANDING.mcpServerName} -- node ${shellQuotedPath}`
     }
     return client.cliCommand || ''
   }
@@ -101,7 +102,7 @@ export function McpClientItem({ client }: McpClientItemProps) {
             <Separator />
             <h4 className="text-sm font-semibold mb-2">Deep Link</h4>
             <p className="text-sm text-muted-foreground">
-              Click the button to open Cursor and install TalkToFigmaDesktop
+              Click the button to open Cursor and install {BRANDING.mcpServerName}
             </p>
             <Button
               onClick={handleDeepLink}

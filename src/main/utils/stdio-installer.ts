@@ -9,6 +9,7 @@ import path from 'node:path';
 import { existsSync, mkdirSync, copyFileSync } from 'node:fs';
 import os from 'node:os';
 import { createLogger } from './logger';
+import { BRANDING } from '@/shared/branding';
 
 const logger = createLogger('stdio');
 
@@ -24,11 +25,11 @@ export function getInstallPaths() {
   // Application Support location (works in all environments including sandboxed)
   let appSupportDir: string;
   if (platform === 'darwin') {
-    appSupportDir = path.join(homeDir, 'Library', 'Application Support', 'TalkToFigma');
+    appSupportDir = path.join(homeDir, 'Library', 'Application Support', BRANDING.mcpServerDirName);
   } else if (platform === 'win32') {
-    appSupportDir = path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), 'TalkToFigma');
+    appSupportDir = path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), BRANDING.mcpServerDirName);
   } else {
-    throw new Error(`Unsupported platform: ${platform}. TalkToFigma Desktop supports macOS and Windows only.`);
+    throw new Error(`Unsupported platform: ${platform}. ${BRANDING.productName} supports macOS and Windows only.`);
   }
 
   const serverPath = path.join(appSupportDir, 'mcp-server.cjs');

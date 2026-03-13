@@ -4,6 +4,8 @@
  * Defines all supported MCP clients and their configuration formats
  */
 
+import { BRANDING } from '@/shared/branding'
+
 export type InstallMethod = 'deeplink' | 'cli' | 'auto-config' | 'manual' | 'coming-soon'
 
 export interface McpClient {
@@ -26,17 +28,17 @@ export const MCP_CLIENTS: Record<string, McpClient> = {
     id: 'cursor',
     displayName: 'Cursor',
     configFormat: 'deeplink',
-    serverName: 'TalkToFigmaDesktop',
+    serverName: BRANDING.mcpServerName,
     installMethod: 'deeplink',
     description: 'Use Cursor to install the MCP server',
-    deepLink: 'cursor://anysphere.cursor-deeplink/mcp/install?name=TalkToFigmaDesktop&config=' +
+    deepLink: `cursor://anysphere.cursor-deeplink/mcp/install?name=${BRANDING.mcpServerName}&config=` +
       encodeURIComponent(JSON.stringify({
         command: 'node',
         args: ['<STDIO_SERVER_PATH>']  // Will be replaced with actual path
       })),
     config: {
       mcpServers: {
-        TalkToFigmaDesktop: {
+        [BRANDING.mcpServerName]: {
           command: 'node',
           args: ['<STDIO_SERVER_PATH>']  // Replace with actual path to mcp-stdio-server.js
         }
@@ -47,7 +49,7 @@ export const MCP_CLIENTS: Record<string, McpClient> = {
       'The server path (~/.talktofigma/server) is automatically configured',
       'Cursor will open and show the MCP configuration dialog',
       'Click "Connect" to complete the installation',
-      'TalkToFigmaDesktop will be added to your MCP servers'
+      `${BRANDING.mcpServerName} will be added to your MCP servers`
     ]
   },
 
@@ -55,10 +57,10 @@ export const MCP_CLIENTS: Record<string, McpClient> = {
     id: 'claude-code',
     displayName: 'Claude Code',
     configFormat: 'cli',
-    serverName: 'TalkToFigmaDesktop',
+    serverName: BRANDING.mcpServerName,
     installMethod: 'cli',
     description: 'Use Claude Code to install the MCP server',
-    cliCommand: 'claude mcp add TalkToFigmaDesktop node <STDIO_SERVER_PATH>',
+    cliCommand: `claude mcp add ${BRANDING.mcpServerName} node <STDIO_SERVER_PATH>`,
     instructions: [
       'Copy the command above (server path is pre-filled)',
       'Open your terminal',
@@ -72,16 +74,16 @@ export const MCP_CLIENTS: Record<string, McpClient> = {
     id: 'codex',
     displayName: 'Codex CLI',
     configFormat: 'cli',
-    serverName: 'TalkToFigmaDesktop',
+    serverName: BRANDING.mcpServerName,
     installMethod: 'cli',
     description: 'Use Codex CLI to install the MCP server',
-    cliCommand: 'codex mcp add TalkToFigmaDesktop -- node <STDIO_SERVER_PATH>',
+    cliCommand: `codex mcp add ${BRANDING.mcpServerName} -- node <STDIO_SERVER_PATH>`,
     instructions: [
       'Copy the command above (server path is pre-filled)',
       'Open your terminal',
       'Paste and run the command',
-      'Use codex mcp list to verify TalkToFigmaDesktop is enabled',
-      'If a malformed entry exists, run codex mcp remove TalkToFigmaDesktop and add it again'
+      `Use codex mcp list to verify ${BRANDING.mcpServerName} is enabled`,
+      `If a malformed entry exists, run codex mcp remove ${BRANDING.mcpServerName} and add it again`
     ]
   },
 
@@ -90,12 +92,12 @@ export const MCP_CLIENTS: Record<string, McpClient> = {
     displayName: 'VS Code',
     configPath: '~/.vscode/mcp.json', // Approximate - may vary
     configFormat: 'json',
-    serverName: 'TalkToFigmaDesktop',
+    serverName: BRANDING.mcpServerName,
     installMethod: 'manual',
     description: 'Use VS Code to install the MCP server',
     config: {
       mcpServers: {
-        TalkToFigmaDesktop: {
+        [BRANDING.mcpServerName]: {
           command: 'node',
           args: ['<STDIO_SERVER_PATH>']  // Replace with actual path to mcp-stdio-server.js
         }
@@ -115,12 +117,12 @@ export const MCP_CLIENTS: Record<string, McpClient> = {
     displayName: 'Antigravity',
     configPath: '~/Library/Application Support/Antigravity/mcp_config.json', // macOS
     configFormat: 'json',
-    serverName: 'TalkToFigmaDesktop',
+    serverName: BRANDING.mcpServerName,
     installMethod: 'manual',
     description: 'Google Antigravity AI editor',
     config: {
       mcpServers: {
-        TalkToFigmaDesktop: {
+        [BRANDING.mcpServerName]: {
           command: 'node',
           args: ['<STDIO_SERVER_PATH>']  // Replace with actual path to mcp-stdio-server.js
         }
@@ -139,7 +141,7 @@ export const MCP_CLIENTS: Record<string, McpClient> = {
     id: 'coming-soon',
     displayName: 'Other Clients',
     configFormat: 'unknown',
-    serverName: 'TalkToFigmaDesktop',
+    serverName: BRANDING.mcpServerName,
     installMethod: 'coming-soon',
     description: 'Support for additional MCP clients coming soon',
     instructions: [
@@ -201,7 +203,7 @@ export function getCursorDeepLink(): string {
     args: ['<STDIO_SERVER_PATH>']
   }
 
-  return `cursor://anysphere.cursor-deeplink/mcp/install?name=TalkToFigmaDesktop&config=${encodeURIComponent(JSON.stringify(config))}`
+  return `cursor://anysphere.cursor-deeplink/mcp/install?name=${BRANDING.mcpServerName}&config=${encodeURIComponent(JSON.stringify(config))}`
 }
 
 /**

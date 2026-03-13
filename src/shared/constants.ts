@@ -4,6 +4,8 @@
  * Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
  */
 
+import { BRANDING } from './branding';
+
 // Shared constants across main and renderer processes
 
 // Server ports
@@ -110,7 +112,7 @@ export const STORE_KEYS = {
 
 // App metadata
 export const APP_INFO = {
-  NAME: 'TalkToFigmaDesktop',
+  NAME: BRANDING.mcpServerName,
   VERSION: '1.0.0',
   DESCRIPTION: 'Figma plugin to MCP server bridge',
 } as const;
