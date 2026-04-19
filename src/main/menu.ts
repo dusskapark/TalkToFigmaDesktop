@@ -23,7 +23,7 @@ export function createMenu(mainWindow: BrowserWindow) {
   /**
    * Navigate to a specific page in the app
    */
-  const showPage = (page: 'terminal' | 'settings' | 'help') => {
+  const showPage = (page: 'assistant' | 'terminal' | 'settings' | 'help') => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) {
         mainWindow.restore();
@@ -72,6 +72,9 @@ export function createMenu(mainWindow: BrowserWindow) {
         } as MenuItemConstructorOptions]
       : []),
 
+    // Edit Menu (clipboard shortcuts: cut/copy/paste/select all)
+    { role: 'editMenu' },
+
     // Server Menu (server control)
     {
       label: 'Server',
@@ -105,18 +108,24 @@ export function createMenu(mainWindow: BrowserWindow) {
       label: 'View',
       submenu: [
         {
-          label: 'Terminal',
+          label: 'Assistant',
           accelerator: 'CmdOrCtrl+1',
+          click: () => showPage('assistant')
+        },
+        { type: 'separator' },
+        {
+          label: 'Terminal',
+          accelerator: 'CmdOrCtrl+2',
           click: () => showPage('terminal')
         },
         {
           label: 'Settings',
-          accelerator: 'CmdOrCtrl+2',
+          accelerator: 'CmdOrCtrl+3',
           click: () => showPage('settings')
         },
         {
           label: 'Help',
-          accelerator: 'CmdOrCtrl+3',
+          accelerator: 'CmdOrCtrl+4',
           click: () => showPage('help')
         },
         { type: 'separator' },

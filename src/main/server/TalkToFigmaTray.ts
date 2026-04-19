@@ -123,6 +123,10 @@ export class TalkToFigmaTray {
 
       // ═══ WINDOW & PAGES ═══
       {
+        label: 'Assistant',
+        click: () => this.showPage('assistant'),
+      },
+      {
         label: 'Terminal',
         click: () => this.showPage('terminal'),
       },
@@ -314,7 +318,7 @@ export class TalkToFigmaTray {
   /**
    * Show main window and navigate to specific page
    */
-  private showPage(page: 'terminal' | 'settings' | 'help'): void {
+  private showPage(page: 'assistant' | 'terminal' | 'settings' | 'help'): void {
     try {
       const windows = BrowserWindow.getAllWindows();
 
