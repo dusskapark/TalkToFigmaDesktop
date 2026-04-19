@@ -8,14 +8,16 @@ import { SseMigrationDialog } from '@/components/SseMigrationDialog'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler'
 import { Button } from '@/components/ui/button'
-import { Copy, Check, RotateCcw } from 'lucide-react'
+import { Copy, Check, RotateCcw, ListTree } from 'lucide-react'
 
 // Pages
 import { TerminalPage } from '@/pages/Terminal'
 import { SettingsPage } from '@/pages/Settings'
 import { HelpPage } from '@/pages/Help'
+import { AssistantPage } from '@/pages/Assistant'
 
 const pageLabels: Record<PageId, string> = {
+  assistant: 'Assistant',
   terminal: 'Terminal',
   settings: 'Settings',
   help: 'Help',
@@ -271,10 +273,16 @@ Ready to bridge Figma and AI tools via MCP
 
   const renderPage = () => {
     switch (currentPage) {
+      case 'assistant':
+        return <AssistantPage />
       case 'terminal':
         return <TerminalPage logs={logs} />
       case 'settings':
-        return <SettingsPage onNavigateToSettings={() => setCurrentPage('settings')} />
+        return (
+          <SettingsPage
+            onNavigateToSettings={() => setCurrentPage('settings')}
+          />
+        )
       case 'help':
         return <HelpPage />
       default:
@@ -345,12 +353,26 @@ Ready to bridge Figma and AI tools via MCP
                   </Button>
                 </>
               )}
+              {currentPage === 'assistant' && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-9 h-9"
+                  title="Open threads"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('assistant:open-threads'))
+                  }}
+                >
+                  <ListTree className="h-4 w-4" />
+                  <span className="sr-only">Open assistant threads</span>
+                </Button>
+              )}
               <AnimatedThemeToggler
                 className="flex items-center justify-center w-9 h-9 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors [&>svg]:size-4"
               />
             </div>
           </header>
-          <main className="flex-1 min-h-0 overflow-auto p-4">
+          <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden p-4">
             {renderPage()}
           </main>
         </SidebarInset>

@@ -8,12 +8,20 @@ import { ipcMain, BrowserWindow, shell, IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../shared/constants';
 import { createLogger } from './utils/logger';
 import * as storeUtils from './utils/store';
-import type { ServerState, FigmaAuthState, UpdateCapabilities } from '../shared/types';
+import type {
+  AssistantRunEvent,
+  FigmaAuthState,
+  OllamaRuntimeStatus,
+  ServerState,
+  ToolApprovalRequest,
+  UpdateCapabilities,
+} from '../shared/types';
 import { registerMcpConfigHandlers } from './handlers/mcp-config-handler';
 import { trackTutorialAction, trackThemeChange, trackPageView, trackServerAction } from './analytics';
 import { checkForUpdates } from './utils/updater';
 import { getUpdateCapabilities } from './utils/distribution';
 import { TalkToFigmaService } from './server/TalkToFigmaService';
+import { AssistantRuntimeService } from './assistant';
 
 const logger = createLogger('IPC');
 
@@ -30,6 +38,19 @@ export function setAuthManager(manager: typeof authManager): void {
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   logger.info('Registering IPC handlers');
+  const assistantRuntime = AssistantRuntimeService.getInstance();
+
+  assistantRuntime.setEventHandlers({
+    onRunEvent: (event: AssistantRunEvent) => {
+      emitToRenderer(mainWindow, IPC_CHANNELS.ASSISTANT_RUN_EVENT, event);
+    },
+    onToolApprovalRequired: (request: ToolApprovalRequest) => {
+      emitToRenderer(mainWindow, IPC_CHANNELS.ASSISTANT_TOOL_APPROVAL_REQUIRED, request);
+    },
+    onRuntimeStatusChanged: (status: OllamaRuntimeStatus) => {
+      emitToRenderer(mainWindow, IPC_CHANNELS.ASSISTANT_RUNTIME_STATUS_CHANGED, status);
+    },
+  });
 
   // ===== Server Control =====
   ipcMain.handle(IPC_CHANNELS.SERVER_START, async () => {
@@ -219,6 +240,58 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC_CHANNELS.UPDATE_GET_CAPABILITIES, async (): Promise<UpdateCapabilities> => {
     logger.debug('IPC: update:get-capabilities');
     return getUpdateCapabilities();
+  });
+
+  // ===== Assistant =====
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_GET_RUNTIME_STATUS, async (_event: IpcMainInvokeEvent, threadId?: string) => {
+    return assistantRuntime.getRuntimeStatus(threadId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_GET_SETUP_GUIDE, async () => {
+    return assistantRuntime.getSetupGuide();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_LIST_MODELS, async () => {
+    return assistantRuntime.listModels();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_SET_ACTIVE_MODEL, async (_event: IpcMainInvokeEvent, threadId: string, model: string) => {
+    return assistantRuntime.setActiveModel(threadId, model);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_CREATE_THREAD, async (_event: IpcMainInvokeEvent, title?: string) => {
+    return assistantRuntime.createThread(title);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_LIST_THREADS, async () => {
+    return assistantRuntime.listThreads();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_GET_THREAD, async (_event: IpcMainInvokeEvent, threadId: string) => {
+    return assistantRuntime.getThread(threadId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_DELETE_THREAD, async (_event: IpcMainInvokeEvent, threadId: string) => {
+    return assistantRuntime.deleteThread(threadId);
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.ASSISTANT_SEND_MESSAGE,
+    async (_event: IpcMainInvokeEvent, threadId: string, text: string, attachments = []) => {
+      return assistantRuntime.sendMessage(threadId, text, attachments);
+    },
+  );
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_CANCEL_RUN, async (_event: IpcMainInvokeEvent, runId: string) => {
+    return assistantRuntime.cancelRun(runId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_APPROVE_TOOL_CALL, async (_event: IpcMainInvokeEvent, runId: string, toolCallId: string) => {
+    return assistantRuntime.approveToolCall(runId, toolCallId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_REJECT_TOOL_CALL, async (_event: IpcMainInvokeEvent, runId: string, toolCallId: string) => {
+    return assistantRuntime.rejectToolCall(runId, toolCallId);
   });
 
   logger.info('IPC handlers registered successfully');

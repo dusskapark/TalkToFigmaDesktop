@@ -2,9 +2,11 @@
 
 import * as React from "react"
 import {
+  Bot,
   Terminal,
   Settings,
   HelpCircle,
+  type LucideIcon,
 } from "lucide-react"
 
 import { NavUser } from "@/components/nav-user"
@@ -22,17 +24,26 @@ import {
   SidebarGroupContent,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { Badge } from "@/components/ui/badge"
 
 // Logo images from public directory (reusing tray icons)
 const logoDark = "tray_dark.png"
 const logoLight = "trayTemplate.png"
 
 // Navigation items
+type NavItem = {
+  id: 'assistant' | 'terminal' | 'settings' | 'help'
+  title: string
+  icon: LucideIcon
+  badge?: string
+}
+
 const navItems = [
+  { id: 'assistant', title: 'Assistant', icon: Bot, badge: 'Beta' },
   { id: 'terminal', title: 'Terminal', icon: Terminal },
   { id: 'settings', title: 'Settings', icon: Settings },
   { id: 'help', title: 'Help', icon: HelpCircle },
-] as const
+] satisfies readonly NavItem[]
 
 export type PageId = typeof navItems[number]['id']
 
@@ -127,6 +138,14 @@ export function AppSidebar({
                   >
                     <item.icon className="size-4" />
                     <span>{item.title}</span>
+                    {!isCollapsed && item.badge ? (
+                      <Badge
+                        variant="secondary"
+                        className="ml-auto h-5 px-1.5 text-[10px] leading-none"
+                      >
+                        {item.badge}
+                      </Badge>
+                    ) : null}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

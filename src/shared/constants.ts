@@ -85,6 +85,23 @@ export const IPC_CHANNELS = {
 
   // SSE migration detection
   SSE_CLIENT_DETECTED: 'sse:client-detected',
+
+  // Assistant
+  ASSISTANT_GET_RUNTIME_STATUS: 'assistant:get-runtime-status',
+  ASSISTANT_GET_SETUP_GUIDE: 'assistant:get-setup-guide',
+  ASSISTANT_LIST_MODELS: 'assistant:list-models',
+  ASSISTANT_SET_ACTIVE_MODEL: 'assistant:set-active-model',
+  ASSISTANT_CREATE_THREAD: 'assistant:create-thread',
+  ASSISTANT_LIST_THREADS: 'assistant:list-threads',
+  ASSISTANT_GET_THREAD: 'assistant:get-thread',
+  ASSISTANT_DELETE_THREAD: 'assistant:delete-thread',
+  ASSISTANT_SEND_MESSAGE: 'assistant:send-message',
+  ASSISTANT_CANCEL_RUN: 'assistant:cancel-run',
+  ASSISTANT_APPROVE_TOOL_CALL: 'assistant:approve-tool-call',
+  ASSISTANT_REJECT_TOOL_CALL: 'assistant:reject-tool-call',
+  ASSISTANT_RUNTIME_STATUS_CHANGED: 'assistant:runtime-status-changed',
+  ASSISTANT_RUN_EVENT: 'assistant:run-event',
+  ASSISTANT_TOOL_APPROVAL_REQUIRED: 'assistant:tool-approval-required',
 } as const;
 
 // Store keys for electron-store
@@ -104,6 +121,13 @@ export const STORE_KEYS = {
   APP_THEME: 'app.theme',
   APP_FIRST_LAUNCH: 'app.firstLaunch',
   APP_SHOW_TUTORIAL: 'app.showTutorial',
+
+  // Assistant
+  ASSISTANT_THREADS: 'assistant.threads',
+  ASSISTANT_MESSAGES: 'assistant.messages',
+  ASSISTANT_RUN_LOGS: 'assistant.runLogs',
+  ASSISTANT_LAST_OPENED_THREAD_ID: 'assistant.lastOpenedThreadId',
+  ASSISTANT_ACTIVE_MODEL: 'assistant.activeModel',
 
   // Analytics
   ANALYTICS_CLIENT_ID: 'analytics.clientId',
