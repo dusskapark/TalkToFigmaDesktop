@@ -154,3 +154,14 @@ body,
     animation: none;
     mix-blend-mode: normal;
 }
+
+.prompt-kit-scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  scrollbar-gutter: auto !important;
+}
+
+.prompt-kit-scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}

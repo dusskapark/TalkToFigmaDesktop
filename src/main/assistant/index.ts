@@ -4,10 +4,4 @@
  * Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
  */
 
-// Shared types index - re-export all types
-
-export * from './server';
-export * from './figma';
-export * from './mcp';
-export * from './ipc';
-export * from './assistant';
+export { AssistantRuntimeService } from './AssistantRuntimeService';
