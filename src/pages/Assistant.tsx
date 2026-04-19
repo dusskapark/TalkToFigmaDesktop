@@ -679,7 +679,7 @@ export function AssistantPage() {
         setRunId(event.runId)
         setStreamingText('')
         setLiveToolEvents([])
-        setReasoningOpen(true)
+        setReasoningOpen(false)
         setError(null)
       }
 
