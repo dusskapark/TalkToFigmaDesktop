@@ -10,11 +10,11 @@ import { ASSISTANT_DEFAULT_MODEL } from './constants';
 function getInstallStepByPlatform(): string {
   switch (process.platform) {
     case 'darwin':
-      return 'Install Ollama: `brew install --cask ollama` or download from ollama.com';
+      return 'Install Ollama (if not installed): `brew install --cask ollama` or download from ollama.com';
     case 'win32':
-      return 'Install Ollama from https://ollama.com/download/windows';
+      return 'Install Ollama (if not installed) from https://ollama.com/download/windows';
     default:
-      return 'Install Ollama from https://ollama.com/download';
+      return 'Install Ollama (if not installed) from https://ollama.com/download';
   }
 }
 
