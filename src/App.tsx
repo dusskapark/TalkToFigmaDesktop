@@ -278,7 +278,11 @@ Ready to bridge Figma and AI tools via MCP
       case 'terminal':
         return <TerminalPage logs={logs} />
       case 'settings':
-        return <SettingsPage onNavigateToSettings={() => setCurrentPage('settings')} />
+        return (
+          <SettingsPage
+            onNavigateToSettings={() => setCurrentPage('settings')}
+          />
+        )
       case 'help':
         return <HelpPage />
       default:

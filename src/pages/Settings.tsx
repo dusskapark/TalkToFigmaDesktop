@@ -17,9 +17,8 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
     const [showMigrationDialog, setShowMigrationDialog] = useState(false)
 
     useEffect(() => {
-        // Load stdio server path
         if (window.electron?.mcp?.getStdioPath) {
-            window.electron.mcp.getStdioPath().then(path => {
+            void window.electron.mcp.getStdioPath().then(path => {
                 setStdioPath(path)
             }).catch(() => {
                 setStdioPath('Error loading path')

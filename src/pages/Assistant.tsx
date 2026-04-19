@@ -489,6 +489,7 @@ export function AssistantPage() {
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null)
 
   const sendLockRef = useRef(false)
+  const setupDialogPinnedRef = useRef(false)
   const shimmerVisibleSinceRef = useRef<number | null>(null)
   const shimmerHideTimerRef = useRef<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -568,17 +569,33 @@ export function AssistantPage() {
     }
   }, [shouldShowPreResponseShimmer, showPreResponseShimmer])
 
+  const openSetupDialog = useCallback((pinned = false) => {
+    setupDialogPinnedRef.current = pinned
+    setSetupDialogOpen(true)
+    setModelDialogOpen(false)
+  }, [])
+
+  const closeSetupDialog = useCallback(() => {
+    setupDialogPinnedRef.current = false
+    setSetupDialogOpen(false)
+  }, [])
+
+  const closeSetupDialogIfAutoManaged = useCallback(() => {
+    if (!setupDialogPinnedRef.current) {
+      setSetupDialogOpen(false)
+    }
+  }, [])
+
   const refreshRuntimeStatus = useCallback(async (threadId?: string) => {
     const status = await window.electron.assistant.getRuntimeStatus(threadId)
     setRuntimeStatus(status)
 
     if (!status.daemonReachable) {
-      setSetupDialogOpen(true)
-      setModelDialogOpen(false)
+      openSetupDialog(false)
       return status
     }
 
-    setSetupDialogOpen(false)
+    closeSetupDialogIfAutoManaged()
 
     if (status.daemonReachable && status.needsModelSelection) {
       setModelDialogOpen(true)
@@ -586,7 +603,7 @@ export function AssistantPage() {
     }
 
     return status
-  }, [])
+  }, [closeSetupDialogIfAutoManaged, openSetupDialog])
 
   const refreshThreads = async () => {
     const nextThreads = await window.electron.assistant.listThreads()
@@ -641,13 +658,13 @@ export function AssistantPage() {
   useEffect(() => {
     const unsubscribeStatus = window.electron.assistant.onRuntimeStatusChanged((status) => {
       setRuntimeStatus(status)
+
       if (!status.daemonReachable) {
-        setSetupDialogOpen(true)
-        setModelDialogOpen(false)
+        openSetupDialog(false)
         return
       }
 
-      setSetupDialogOpen(false)
+      closeSetupDialogIfAutoManaged()
 
       if (status.daemonReachable && status.needsModelSelection) {
         setModelDialogOpen(true)
@@ -730,7 +747,7 @@ export function AssistantPage() {
       unsubscribeRunEvent()
       unsubscribeApproval()
     }
-  }, [activeThreadId, permissionMode, refreshRuntimeStatus])
+  }, [activeThreadId, closeSetupDialogIfAutoManaged, openSetupDialog, permissionMode, refreshRuntimeStatus])
 
   useEffect(() => {
     if (!modelDialogOpen) return
@@ -775,6 +792,20 @@ export function AssistantPage() {
       window.removeEventListener('assistant:open-threads', handleOpenThreads)
     }
   }, [])
+
+  useEffect(() => {
+    const handleOpenSetup = () => {
+      openSetupDialog(true)
+      void window.electron.assistant.getRuntimeStatus(activeThreadId ?? undefined).then((status) => {
+        setRuntimeStatus(status)
+      })
+    }
+
+    window.addEventListener('assistant:open-setup', handleOpenSetup)
+    return () => {
+      window.removeEventListener('assistant:open-setup', handleOpenSetup)
+    }
+  }, [activeThreadId, openSetupDialog])
 
   const handleCreateThread = async () => {
     const created = await window.electron.assistant.createThread()
@@ -824,7 +855,7 @@ export function AssistantPage() {
     }
 
     if (appState === 'needs-setup') {
-      setSetupDialogOpen(true)
+      openSetupDialog(false)
       return
     }
 
@@ -998,11 +1029,11 @@ export function AssistantPage() {
       const status = await refreshRuntimeStatus(activeThreadId ?? undefined)
 
       if (!status.daemonReachable) {
-        setSetupDialogOpen(true)
+        openSetupDialog(false)
         return
       }
 
-      setSetupDialogOpen(false)
+      closeSetupDialog()
       if (status.daemonReachable && status.needsModelSelection) {
         setModelDialogOpen(true)
       }
@@ -1219,7 +1250,7 @@ export function AssistantPage() {
                         <DropdownMenuItem
                           onSelect={() => {
                             if (!runtimeStatus?.daemonReachable) {
-                              setSetupDialogOpen(true)
+                              openSetupDialog(false)
                               return
                             }
                             setModelDialogOpen(true)
@@ -1325,12 +1356,21 @@ export function AssistantPage() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={setupDialogOpen} onOpenChange={setSetupDialogOpen}>
+      <Dialog
+        open={setupDialogOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setSetupDialogOpen(true)
+            return
+          }
+          closeSetupDialog()
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Set up Ollama</DialogTitle>
+            <DialogTitle>Set up local Ollama</DialogTitle>
             <DialogDescription>
-              The local Ollama API is not reachable. Start Ollama and make sure the endpoint responds before selecting a model.
+              Ollama is required for the local assistant. Complete this onboarding: install Ollama, run it, then install <b>gemma4:e4b</b>.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
@@ -1341,19 +1381,31 @@ export function AssistantPage() {
               </div>
             </div>
 
-            {setupGuide?.steps?.length ? (
-              <ol className="space-y-1.5 pl-5">
-                {setupGuide.steps.map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-            ) : null}
-
             <div className="space-y-1.5 rounded-md border p-3">
-              <p className="text-muted-foreground text-xs">Recommended multimodal model</p>
-              <code className="block rounded bg-muted px-2 py-1 text-xs">ollama pull qwen2.5-vl</code>
-              <code className="block rounded bg-muted px-2 py-1 text-xs">ollama serve</code>
-              <code className="block rounded bg-muted px-2 py-1 text-xs">ollama list</code>
+              <p className="font-medium">Onboarding</p>
+              <ol className="space-y-2 pl-5">
+                <li>
+                  <p className="font-medium">Install Ollama</p>
+                  <p className="text-muted-foreground text-xs">
+                    {setupGuide?.steps?.[0] ?? 'Install Ollama from the official website.'}
+                  </p>
+                </li>
+                <li>
+                  <p className="font-medium">Run Ollama</p>
+                  <code className="mt-1 block rounded bg-muted px-2 py-1 text-xs">
+                    {setupGuide?.serveCommand ?? 'ollama serve'}
+                  </code>
+                </li>
+                <li>
+                  <p className="font-medium">Install default model</p>
+                  <code className="mt-1 block rounded bg-muted px-2 py-1 text-xs">
+                    {setupGuide?.pullCommand ?? 'ollama pull gemma4:e4b'}
+                  </code>
+                  <code className="mt-1 block rounded bg-muted px-2 py-1 text-xs">
+                    {setupGuide?.verifyCommand ?? 'ollama list'}
+                  </code>
+                </li>
+              </ol>
             </div>
           </div>
           <DialogFooter>
