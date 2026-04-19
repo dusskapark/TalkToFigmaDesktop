@@ -1,0 +1,113 @@
+/*
+ * Copyright 2026 Grabtaxi Holdings Pte Ltd (GRAB), All rights reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
+ */
+
+export type AssistantRole = 'user' | 'assistant' | 'system';
+export type AssistantToolSafety = 'read' | 'write';
+export type AssistantRunFinishReason = 'completed' | 'max-steps' | 'cancelled' | 'error';
+
+export interface AssistantMessagePartText {
+  type: 'text';
+  text: string;
+}
+
+export interface AssistantMessagePartAttachment {
+  type: 'attachment';
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  imageBase64?: string;
+  textContent?: string;
+  truncated?: boolean;
+}
+
+export type AssistantToolPartState =
+  | 'input-streaming'
+  | 'input-available'
+  | 'output-available'
+  | 'output-error';
+
+export interface AssistantMessagePartTool {
+  type: `tool-${string}`;
+  state: AssistantToolPartState;
+  toolCallId?: string;
+  input?: Record<string, unknown>;
+  output?: unknown;
+  errorText?: string;
+  safety?: AssistantToolSafety;
+}
+
+export type AssistantMessagePart =
+  | AssistantMessagePartText
+  | AssistantMessagePartAttachment
+  | AssistantMessagePartTool;
+
+export interface AssistantMessage {
+  id: string;
+  threadId: string;
+  role: AssistantRole;
+  parts: AssistantMessagePart[];
+  createdAt: number;
+}
+
+export interface AssistantThread {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  activeModel: string | null;
+}
+
+export interface AssistantRunLog {
+  runId: string;
+  threadId: string;
+  finishReason: AssistantRunFinishReason;
+  toolCalls: Array<{
+    toolCallId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+    safety: AssistantToolSafety;
+    approved?: boolean;
+    ok?: boolean;
+  }>;
+  createdAt: number;
+}
+
+export type AssistantRunEvent =
+  | { type: 'run-start'; runId: string; threadId: string }
+  | { type: 'token'; runId: string; textDelta: string }
+  | { type: 'tool-part'; runId: string; part: AssistantMessagePartTool & { toolCallId: string } }
+  | { type: 'run-end'; runId: string; finishReason: AssistantRunFinishReason; messageId?: string; error?: string };
+
+export interface ToolApprovalRequest {
+  runId: string;
+  threadId: string;
+  toolCallId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  safety: AssistantToolSafety;
+  requestedAt: number;
+}
+
+export interface OllamaRuntimeStatus {
+  daemonReachable: boolean;
+  installedModels: string[];
+  defaultModel: 'gemma4:e4b';
+  defaultModelInstalled: boolean;
+  activeModel: string | null;
+  needsModelSelection: boolean;
+  guideModeOnly: true;
+}
+
+export interface OllamaSetupGuide {
+  title: string;
+  defaultModel: string;
+  steps: string[];
+  installUrl: string;
+  serveCommand: string;
+  pullCommand: string;
+  verifyCommand: string;
+}

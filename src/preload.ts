@@ -94,6 +94,28 @@ const electronAPI: ElectronAPI = {
   sse: {
     onClientDetected: createEventListener<Record<string, never>>(IPC_CHANNELS.SSE_CLIENT_DETECTED),
   },
+
+  assistant: {
+    getRuntimeStatus: (threadId?: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_GET_RUNTIME_STATUS, threadId),
+    getSetupGuide: () => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_GET_SETUP_GUIDE),
+    listModels: () => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_LIST_MODELS),
+    setActiveModel: (threadId: string, model: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_SET_ACTIVE_MODEL, threadId, model),
+    createThread: (title?: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_CREATE_THREAD, title),
+    listThreads: () => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_LIST_THREADS),
+    getThread: (threadId: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_GET_THREAD, threadId),
+    deleteThread: (threadId: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_DELETE_THREAD, threadId),
+    sendMessage: (threadId: string, text: string, attachments = []) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_SEND_MESSAGE, threadId, text, attachments),
+    cancelRun: (runId: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_CANCEL_RUN, runId),
+    approveToolCall: (runId: string, toolCallId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_APPROVE_TOOL_CALL, runId, toolCallId),
+    rejectToolCall: (runId: string, toolCallId: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_REJECT_TOOL_CALL, runId, toolCallId),
+    onRuntimeStatusChanged: createEventListener(IPC_CHANNELS.ASSISTANT_RUNTIME_STATUS_CHANGED),
+    onRunEvent: createEventListener(IPC_CHANNELS.ASSISTANT_RUN_EVENT),
+    onToolApprovalRequired: createEventListener(IPC_CHANNELS.ASSISTANT_TOOL_APPROVAL_REQUIRED),
+  },
 };
 
 // Expose API to renderer

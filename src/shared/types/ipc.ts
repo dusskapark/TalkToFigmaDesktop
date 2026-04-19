@@ -2,6 +2,15 @@
 
 import type { ServerState } from './server';
 import type { FigmaAuthState, FigmaUser } from './figma';
+import type {
+  AssistantMessagePartAttachment,
+  AssistantMessage,
+  AssistantRunEvent,
+  AssistantThread,
+  OllamaRuntimeStatus,
+  OllamaSetupGuide,
+  ToolApprovalRequest,
+} from './assistant';
 
 export interface UpdateCapabilities {
   channel: 'direct' | 'mas' | 'msix';
@@ -28,7 +37,10 @@ export interface MainToRendererEvents {
     user?: FigmaUser;
   };
   'log:entry': LogEntry;
-  'tray:navigate-to-page': 'terminal' | 'settings' | 'help';
+  'tray:navigate-to-page': 'assistant' | 'terminal' | 'settings' | 'help';
+  'assistant:runtime-status-changed': OllamaRuntimeStatus;
+  'assistant:run-event': AssistantRunEvent;
+  'assistant:tool-approval-required': ToolApprovalRequest;
 }
 
 // Invocations from Renderer to Main
@@ -60,6 +72,24 @@ export interface RendererToMainInvocations {
   // Updates
   'update:check': () => Promise<void>;
   'update:get-capabilities': () => Promise<UpdateCapabilities>;
+
+  // Assistant
+  'assistant:get-runtime-status': (threadId?: string) => Promise<OllamaRuntimeStatus>;
+  'assistant:get-setup-guide': () => Promise<OllamaSetupGuide>;
+  'assistant:list-models': () => Promise<string[]>;
+  'assistant:set-active-model': (threadId: string, model: string) => Promise<{ success: boolean; error?: string }>;
+  'assistant:create-thread': (title?: string) => Promise<AssistantThread>;
+  'assistant:list-threads': () => Promise<AssistantThread[]>;
+  'assistant:get-thread': (threadId: string) => Promise<{ thread: AssistantThread | null; messages: AssistantMessage[] }>;
+  'assistant:delete-thread': (threadId: string) => Promise<{ success: boolean; error?: string }>;
+  'assistant:send-message': (
+    threadId: string,
+    text: string,
+    attachments?: AssistantMessagePartAttachment[],
+  ) => Promise<{ success: boolean; runId?: string; error?: string }>;
+  'assistant:cancel-run': (runId: string) => Promise<{ success: boolean; error?: string }>;
+  'assistant:approve-tool-call': (runId: string, toolCallId: string) => Promise<{ success: boolean; error?: string }>;
+  'assistant:reject-tool-call': (runId: string, toolCallId: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 // Log entry type
@@ -137,6 +167,28 @@ export interface ElectronAPI {
 
   sse: {
     onClientDetected: (callback: () => void) => () => void;
+  };
+
+  assistant: {
+    getRuntimeStatus: (threadId?: string) => Promise<OllamaRuntimeStatus>;
+    getSetupGuide: () => Promise<OllamaSetupGuide>;
+    listModels: () => Promise<string[]>;
+    setActiveModel: (threadId: string, model: string) => Promise<{ success: boolean; error?: string }>;
+    createThread: (title?: string) => Promise<AssistantThread>;
+    listThreads: () => Promise<AssistantThread[]>;
+    getThread: (threadId: string) => Promise<{ thread: AssistantThread | null; messages: AssistantMessage[] }>;
+    deleteThread: (threadId: string) => Promise<{ success: boolean; error?: string }>;
+    sendMessage: (
+      threadId: string,
+      text: string,
+      attachments?: AssistantMessagePartAttachment[],
+    ) => Promise<{ success: boolean; runId?: string; error?: string }>;
+    cancelRun: (runId: string) => Promise<{ success: boolean; error?: string }>;
+    approveToolCall: (runId: string, toolCallId: string) => Promise<{ success: boolean; error?: string }>;
+    rejectToolCall: (runId: string, toolCallId: string) => Promise<{ success: boolean; error?: string }>;
+    onRuntimeStatusChanged: (callback: (status: MainToRendererEvents['assistant:runtime-status-changed']) => void) => () => void;
+    onRunEvent: (callback: (event: MainToRendererEvents['assistant:run-event']) => void) => () => void;
+    onToolApprovalRequired: (callback: (request: MainToRendererEvents['assistant:tool-approval-required']) => void) => () => void;
   };
 }
 

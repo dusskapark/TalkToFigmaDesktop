@@ -1,0 +1,50 @@
+import * as React from 'react'
+import { StickToBottom } from 'use-stick-to-bottom'
+
+import { cn } from '@/lib/utils'
+
+type ChatContainerRootProps = {
+  children: React.ReactNode
+  className?: string
+} & React.HTMLAttributes<HTMLDivElement>
+
+type ChatContainerContentProps = {
+  children: React.ReactNode
+  className?: string
+} & React.HTMLAttributes<HTMLDivElement>
+
+type ChatContainerScrollAnchorProps = {
+  className?: string
+} & React.HTMLAttributes<HTMLDivElement>
+
+function ChatContainerRoot({ className, children, ...props }: ChatContainerRootProps) {
+  return (
+    <StickToBottom
+      className={cn('relative flex h-full w-full min-w-0 min-h-0 overflow-hidden', className)}
+      resize="smooth"
+      initial="instant"
+      role="log"
+      {...props}
+    >
+      {children}
+    </StickToBottom>
+  )
+}
+
+function ChatContainerContent({ className, children, ...props }: ChatContainerContentProps) {
+  return (
+    <StickToBottom.Content
+      scrollClassName="prompt-kit-scrollbar-hidden h-full w-full overflow-y-auto overflow-x-hidden ![scrollbar-gutter:auto]"
+      className={cn('flex w-full min-w-0 flex-col', className)}
+      {...props}
+    >
+      {children}
+    </StickToBottom.Content>
+  )
+}
+
+function ChatContainerScrollAnchor({ className, ...props }: ChatContainerScrollAnchorProps) {
+  return <div className={cn('h-px w-full shrink-0 scroll-mt-4', className)} aria-hidden="true" {...props} />
+}
+
+export { ChatContainerRoot, ChatContainerContent, ChatContainerScrollAnchor }
