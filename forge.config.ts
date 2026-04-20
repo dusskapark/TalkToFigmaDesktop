@@ -31,6 +31,10 @@ const config: ForgeConfig = {
       './public',
       './runtime/llama',
     ],
+    osxUniversal: {
+      // Runtime binaries for both archs are bundled intentionally; allow identical Mach-O files.
+      x64ArchFiles: 'Contents/Resources/llama/bin/**/*',
+    },
     // Code signing configuration (uses .env locally, CI environment variables in automation)
     osxSign: (isMAS ? {
       // Mac App Store signing
