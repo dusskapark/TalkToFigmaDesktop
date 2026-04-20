@@ -280,6 +280,7 @@ async function main() {
   await mkdir(CACHE_ROOT, { recursive: true });
 
   const manifest = await loadManifest();
+  let manifestDirty = false;
   const shouldRefresh = options.refresh || !manifest.release;
 
   if (shouldRefresh) {
@@ -308,8 +309,7 @@ async function main() {
         lastResolvedAt: new Date().toISOString(),
       };
     }
-    manifest.updatedAt = new Date().toISOString();
-    await saveManifest(manifest);
+    manifestDirty = true;
   }
 
   for (const target of targets) {
@@ -353,22 +353,38 @@ async function main() {
       await chmod(binaryDestination, 0o755);
     }
     const dependencyCount = await copyRuntimeDependencies(binarySource, outputDir);
-
     const binarySha = await computeSha256(binaryDestination);
-    manifest.platforms[target] = {
-      ...manifest.platforms[target],
-      binaryRelativePath: relative(RUNTIME_ROOT, binaryDestination).replace(/\\/g, '/'),
+
+    const binaryRelativePath = relative(RUNTIME_ROOT, binaryDestination).replace(/\\/g, '/');
+    const previousEntry = manifest.platforms[target] || {};
+    const preservePreparedAt =
+      previousEntry.binarySha256 === binarySha
+      && previousEntry.binaryRelativePath === binaryRelativePath
+      && previousEntry.runtimeDependencyCount === dependencyCount;
+    const preparedAt = preservePreparedAt
+      ? (previousEntry.preparedAt || new Date().toISOString())
+      : new Date().toISOString();
+
+    const nextEntry = {
+      ...previousEntry,
+      binaryRelativePath,
       binarySha256: binarySha,
       runtimeDependencyCount: dependencyCount,
-      preparedAt: new Date().toISOString(),
+      preparedAt,
     };
+    if (JSON.stringify(previousEntry) !== JSON.stringify(nextEntry)) {
+      manifest.platforms[target] = nextEntry;
+      manifestDirty = true;
+    }
 
     const size = (await stat(binaryDestination)).size;
     console.log(`[prepare-llama-runtime] prepared ${target}: ${binaryDestination} (${size} bytes, deps=${dependencyCount})`);
   }
 
-  manifest.updatedAt = new Date().toISOString();
-  await saveManifest(manifest);
+  if (manifestDirty) {
+    manifest.updatedAt = new Date().toISOString();
+    await saveManifest(manifest);
+  }
 }
 
 main().catch((error) => {

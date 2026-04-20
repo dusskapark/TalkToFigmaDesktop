@@ -28,6 +28,11 @@ import type {
   AssistantModelDownloadState,
   AssistantModelUploadRequest,
 } from '../../shared/types';
+import {
+  isResumeNotSatisfiable,
+  resolveCorruptedArtifactCleanupPaths,
+  resolveResumePreparation,
+} from './modelDownloadRecovery';
 
 interface DownloadSnapshot {
   state: AssistantModelDownloadState;
@@ -479,22 +484,22 @@ export class ModelInstallService {
       unlinkSync(finalPath);
     }
 
-    let existingPartBytes = existsSync(partPath) ? statSync(partPath).size : 0;
-    if (existingPartBytes >= artifact.expectedSizeBytes) {
+    const existingPartBytes = existsSync(partPath) ? statSync(partPath).size : 0;
+    const resumePreparation = resolveResumePreparation(existingPartBytes, artifact.expectedSizeBytes);
+    if (resumePreparation.resetPart) {
       this.safeDeleteFile(partPath);
-      existingPartBytes = 0;
     }
 
     const headers: Record<string, string> = {};
-    if (existingPartBytes > 0) {
-      headers.Range = `bytes=${existingPartBytes}-`;
+    if (resumePreparation.rangeHeader) {
+      headers.Range = resumePreparation.rangeHeader;
     }
     const response = await fetch(artifact.url, {
       method: 'GET',
       ...(Object.keys(headers).length > 0 ? { headers } : {}),
       signal,
     });
-    if (response.status === 416) {
+    if (isResumeNotSatisfiable(response.status)) {
       this.safeDeleteFile(partPath);
       throw new Error(`Failed to resume download for ${artifact.fileName}: HTTP 416`);
     }
@@ -502,11 +507,11 @@ export class ModelInstallService {
       throw new Error(`Failed to download ${artifact.fileName}: HTTP ${response.status}`);
     }
 
-    const appendMode = response.status === 206 && existingPartBytes > 0;
+    const appendMode = response.status === 206 && resumePreparation.nextPartBytes > 0;
     const fileStream = createWriteStream(partPath, { flags: appendMode ? 'a' : 'w' });
 
     if (this.activeDownloadTask && appendMode) {
-      this.activeDownloadTask.downloadedBytes += existingPartBytes;
+      this.activeDownloadTask.downloadedBytes += resumePreparation.nextPartBytes;
       this.updateDownloadProgress({ currentFile: artifact.fileName });
     }
 
@@ -556,8 +561,9 @@ export class ModelInstallService {
 
   private cleanupCorruptedArtifact(artifact: DownloadArtifact): void {
     const partPath = this.getPartPath(artifact.fileName);
-    this.safeDeleteFile(partPath);
-    this.safeDeleteFile(artifact.destinationPath);
+    for (const cleanupPath of resolveCorruptedArtifactCleanupPaths(partPath, artifact.destinationPath)) {
+      this.safeDeleteFile(cleanupPath);
+    }
   }
 
   private safeDeleteFile(filePath: string): void {

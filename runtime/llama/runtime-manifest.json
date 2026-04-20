@@ -24,7 +24,11 @@
       "assetName": "llama-b8855-bin-macos-x64.tar.gz",
       "assetUrl": "https://github.com/ggml-org/llama.cpp/releases/download/b8855/llama-b8855-bin-macos-x64.tar.gz",
       "assetSha256": "5f229b3a815280737f2e8b93b49d8ca9c6d0d87bddb280c69266ea1a06daa3e2",
-      "lastResolvedAt": "2026-04-20T15:20:36.252Z"
+      "lastResolvedAt": "2026-04-20T15:20:36.252Z",
+      "binaryRelativePath": "bin/darwin-x64/llama-server",
+      "binarySha256": "9351344633ce46a57be2c5ff40d2e06e51a0576c3e5c3c1f5780a7d36360d2c4",
+      "runtimeDependencyCount": 24,
+      "preparedAt": "2026-04-20T16:17:58.902Z"
     },
     "windows-x64": {
       "assetName": "llama-b8855-bin-win-cpu-x64.zip",
@@ -42,5 +46,5 @@
       "lastResolvedAt": "2026-04-20T15:20:36.252Z"
     }
   },
-  "updatedAt": "2026-04-20T15:36:51.802Z"
+  "updatedAt": "2026-04-20T16:17:58.903Z"
 }
