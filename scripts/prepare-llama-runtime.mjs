@@ -78,7 +78,7 @@ function resolveTargets(options) {
     return options.targets;
   }
 
-  if (process.platform === 'darwin' && process.env.CI) {
+  if (process.platform === 'darwin') {
     return ['darwin-arm64', 'darwin-x64'];
   }
 

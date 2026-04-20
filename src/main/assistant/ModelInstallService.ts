@@ -217,6 +217,7 @@ export class ModelInstallService {
 
         const actualSha = await this.computeSha256(verificationPath);
         if (actualSha !== artifact.expectedSha256) {
+          this.cleanupCorruptedArtifact(artifact);
           throw new Error(`Checksum mismatch for ${artifact.fileName}`);
         }
 
@@ -478,7 +479,12 @@ export class ModelInstallService {
       unlinkSync(finalPath);
     }
 
-    const existingPartBytes = existsSync(partPath) ? statSync(partPath).size : 0;
+    let existingPartBytes = existsSync(partPath) ? statSync(partPath).size : 0;
+    if (existingPartBytes >= artifact.expectedSizeBytes) {
+      this.safeDeleteFile(partPath);
+      existingPartBytes = 0;
+    }
+
     const headers: Record<string, string> = {};
     if (existingPartBytes > 0) {
       headers.Range = `bytes=${existingPartBytes}-`;
@@ -488,6 +494,10 @@ export class ModelInstallService {
       ...(Object.keys(headers).length > 0 ? { headers } : {}),
       signal,
     });
+    if (response.status === 416) {
+      this.safeDeleteFile(partPath);
+      throw new Error(`Failed to resume download for ${artifact.fileName}: HTTP 416`);
+    }
     if (!response.ok && response.status !== 206) {
       throw new Error(`Failed to download ${artifact.fileName}: HTTP ${response.status}`);
     }
@@ -542,6 +552,23 @@ export class ModelInstallService {
       stream.on('error', reject);
       stream.on('end', () => resolve(hash.digest('hex')));
     });
+  }
+
+  private cleanupCorruptedArtifact(artifact: DownloadArtifact): void {
+    const partPath = this.getPartPath(artifact.fileName);
+    this.safeDeleteFile(partPath);
+    this.safeDeleteFile(artifact.destinationPath);
+  }
+
+  private safeDeleteFile(filePath: string): void {
+    if (!existsSync(filePath)) {
+      return;
+    }
+    try {
+      unlinkSync(filePath);
+    } catch (error) {
+      this.logger.warn(`Failed to delete file: ${filePath}, ${error}`);
+    }
   }
 
   private safeDeleteManagedFile(filePath: string): void {
