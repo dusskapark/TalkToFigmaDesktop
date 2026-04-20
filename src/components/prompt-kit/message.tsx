@@ -1,6 +1,7 @@
 import * as React from 'react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { Markdown } from '@/components/prompt-kit/markdown'
 
@@ -68,5 +69,25 @@ export function MessageContent({
         <p className="whitespace-pre-wrap break-words">{content}</p>
       )}
     </div>
+  )
+}
+
+type MessageActionsProps = React.HTMLAttributes<HTMLDivElement>
+
+export function MessageActions({ className, ...props }: MessageActionsProps) {
+  return <div className={cn('flex items-center gap-0.5 text-muted-foreground', className)} {...props} />
+}
+
+interface MessageActionProps {
+  tooltip: React.ReactNode
+  children: React.ReactElement
+}
+
+export function MessageAction({ tooltip, children }: MessageActionProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent sideOffset={6}>{tooltip}</TooltipContent>
+    </Tooltip>
   )
 }

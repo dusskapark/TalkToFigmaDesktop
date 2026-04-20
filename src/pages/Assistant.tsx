@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { Check, ChevronDown, Loader2, Paperclip, Plus, SendHorizontal, Shield, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Copy, Loader2, Paperclip, Plus, SendHorizontal, Shield, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -10,6 +10,8 @@ import {
   ChatContainerRoot,
   ChatContainerScrollAnchor,
   Message,
+  MessageAction,
+  MessageActions,
   MessageContent,
   PromptInput,
   PromptInputAction,
@@ -72,6 +74,7 @@ const TEXT_ATTACHMENT_EXTENSIONS = new Set([
 type AppState = 'ready' | 'needs-setup' | 'needs-model-selection' | 'waiting-approval'
 type ToolPartState = ToolPart['state']
 type PermissionMode = 'run-everything' | 'ask-every-time'
+type AssistantFeedback = 'up' | 'down'
 const VALID_TOOL_PART_STATES: ToolPartState[] = [
   'input-streaming',
   'input-available',
@@ -487,11 +490,14 @@ export function AssistantPage() {
   const [reasoningOpen, setReasoningOpen] = useState(false)
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('ask-every-time')
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null)
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
+  const [assistantFeedbackByMessageId, setAssistantFeedbackByMessageId] = useState<Record<string, AssistantFeedback>>({})
 
   const sendLockRef = useRef(false)
   const setupDialogPinnedRef = useRef(false)
   const shimmerVisibleSinceRef = useRef<number | null>(null)
   const shimmerHideTimerRef = useRef<number | null>(null)
+  const copyFeedbackTimerRef = useRef<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const activeThread = useMemo(
@@ -505,6 +511,15 @@ export function AssistantPage() {
     () => toRenderableItems(messages, liveToolEvents, streamingText),
     [messages, liveToolEvents, streamingText],
   )
+  const lastAssistantMessageId = useMemo(() => {
+    for (let index = renderableItems.length - 1; index >= 0; index -= 1) {
+      const item = renderableItems[index]
+      if (item.kind === 'text' && item.role === 'assistant' && item.text.trim().length > 0) {
+        return item.id
+      }
+    }
+    return null
+  }, [renderableItems])
 
   const isComposerDisabled = !activeThreadId || !!runId || isSending || appState === 'needs-setup'
   const isSendDisabled = isComposerDisabled || appState === 'needs-model-selection'
@@ -568,6 +583,16 @@ export function AssistantPage() {
       }
     }
   }, [shouldShowPreResponseShimmer, showPreResponseShimmer])
+
+  useEffect(
+    () => () => {
+      if (copyFeedbackTimerRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimerRef.current)
+        copyFeedbackTimerRef.current = null
+      }
+    },
+    [],
+  )
 
   const openSetupDialog = useCallback((pinned = false) => {
     setupDialogPinnedRef.current = pinned
@@ -1060,6 +1085,37 @@ export function AssistantPage() {
     await window.electron.assistant.cancelRun(runId)
   }, [runId])
 
+  const handleCopyAssistantMessage = useCallback(async (messageId: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopiedMessageId(messageId)
+      if (copyFeedbackTimerRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimerRef.current)
+      }
+      copyFeedbackTimerRef.current = window.setTimeout(() => {
+        setCopiedMessageId((current) => (current === messageId ? null : current))
+        copyFeedbackTimerRef.current = null
+      }, 1500)
+    } catch (copyError) {
+      console.error('Failed to copy assistant message', copyError)
+    }
+  }, [])
+
+  const handleAssistantFeedback = useCallback((messageId: string, feedback: AssistantFeedback) => {
+    setAssistantFeedbackByMessageId((current) => {
+      const existing = current[messageId]
+      if (existing === feedback) {
+        const next = { ...current }
+        delete next[messageId]
+        return next
+      }
+      return {
+        ...current,
+        [messageId]: feedback,
+      }
+    })
+  }, [])
+
   return (
     <>
       <div className="flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-background">
@@ -1089,13 +1145,68 @@ export function AssistantPage() {
                         >
                           {hasText ? (
                             isAssistant ? (
-                              <MessageContent
-                                from={from}
-                                markdown
-                                className="text-foreground prose w-full flex-1 rounded-lg border-transparent bg-transparent p-2 shadow-none"
-                              >
-                                {item.text}
-                              </MessageContent>
+                              <div className="group flex w-full flex-col gap-0.5">
+                                <MessageContent
+                                  from={from}
+                                  markdown
+                                  className="text-foreground prose w-full flex-1 rounded-lg border-transparent bg-transparent p-2 leading-relaxed shadow-none"
+                                >
+                                  {item.text}
+                                </MessageContent>
+                                <MessageActions
+                                  className={cn(
+                                    'ml-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100',
+                                    item.id === lastAssistantMessageId && 'opacity-100',
+                                  )}
+                                >
+                                  <MessageAction tooltip={copiedMessageId === item.id ? 'Copied' : 'Copy'}>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className="rounded-full"
+                                      aria-label="Copy assistant message"
+                                      onClick={() => void handleCopyAssistantMessage(item.id, item.text)}
+                                    >
+                                      {copiedMessageId === item.id ? (
+                                        <Check className="size-3.5" />
+                                      ) : (
+                                        <Copy className="size-3.5" />
+                                      )}
+                                    </Button>
+                                  </MessageAction>
+                                  <MessageAction tooltip="Helpful">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className={cn(
+                                        'rounded-full',
+                                        assistantFeedbackByMessageId[item.id] === 'up' && 'bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20',
+                                      )}
+                                      aria-label="Mark assistant response as helpful"
+                                      aria-pressed={assistantFeedbackByMessageId[item.id] === 'up'}
+                                      onClick={() => handleAssistantFeedback(item.id, 'up')}
+                                    >
+                                      <ThumbsUp className="size-3.5" />
+                                    </Button>
+                                  </MessageAction>
+                                  <MessageAction tooltip="Not helpful">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      className={cn(
+                                        'rounded-full',
+                                        assistantFeedbackByMessageId[item.id] === 'down'
+                                          && 'bg-rose-500/10 text-rose-700 hover:bg-rose-500/20',
+                                      )}
+                                      aria-label="Mark assistant response as not helpful"
+                                      aria-pressed={assistantFeedbackByMessageId[item.id] === 'down'}
+                                      onClick={() => handleAssistantFeedback(item.id, 'down')}
+                                    >
+                                      <ThumbsDown className="size-3.5" />
+                                    </Button>
+                                  </MessageAction>
+                                </MessageActions>
+                              </div>
                             ) : (
                               <MessageContent from="user" className="bg-primary text-primary-foreground max-w-[85%] sm:max-w-[75%]">
                                 {item.text}
