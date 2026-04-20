@@ -92,22 +92,73 @@ export interface ToolApprovalRequest {
   requestedAt: number;
 }
 
-export interface OllamaRuntimeStatus {
-  daemonReachable: boolean;
-  installedModels: string[];
-  defaultModel: 'gemma4:e4b';
-  defaultModelInstalled: boolean;
-  activeModel: string | null;
-  needsModelSelection: boolean;
-  guideModeOnly: true;
+export type AssistantRuntimeHealth = 'starting' | 'ready' | 'error';
+export type AssistantModelDownloadState = 'idle' | 'downloading' | 'verifying' | 'completed' | 'failed';
+
+export interface AssistantModelDownloadProgress {
+  stage: 'downloading' | 'verifying';
+  downloadedBytes: number;
+  totalBytes: number;
+  speedBytesPerSecond: number;
+  etaSeconds: number | null;
+  currentFile: string | null;
 }
 
-export interface OllamaSetupGuide {
-  title: string;
-  defaultModel: string;
-  steps: string[];
-  installUrl: string;
-  serveCommand: string;
-  pullCommand: string;
-  verifyCommand: string;
+export interface AssistantModelCatalogItem {
+  id: string;
+  displayName: string;
+  version: string;
+  recommended: boolean;
+  supportsVision: boolean;
+  source: 'huggingface';
+  modelFileName: string;
+  modelUrl: string;
+  modelSha256: string;
+  modelSizeBytes: number;
+  mmprojFileName?: string;
+  mmprojUrl?: string;
+  mmprojSha256?: string;
+  mmprojSizeBytes?: number;
 }
+
+export interface AssistantInstalledModel {
+  id: string;
+  displayName: string;
+  version: string;
+  source: 'download' | 'upload';
+  supportsVision: boolean;
+  modelPath: string;
+  modelSha256: string;
+  modelSizeBytes: number;
+  mmprojPath?: string;
+  mmprojSha256?: string;
+  mmprojSizeBytes?: number;
+  installedAt: number;
+}
+
+export interface AssistantRuntimeStatus {
+  backend: 'embedded';
+  health: AssistantRuntimeHealth;
+  modelInstalled: boolean;
+  runtimeBinaryReady: boolean;
+  runtimeBinarySource: 'bundled' | 'missing';
+  runtimeBinaryPath?: string;
+  activeModel: string | null;
+  installedModels: string[];
+  installedModelDetails: AssistantInstalledModel[];
+  defaultModel: 'gemma4:e4b';
+  recommendedModel: AssistantModelCatalogItem;
+  supportsVision: boolean;
+  downloadState: AssistantModelDownloadState;
+  downloadProgress?: AssistantModelDownloadProgress;
+  error?: string;
+}
+
+export interface AssistantModelUploadRequest {
+  ggufPath: string;
+  mmprojPath?: string;
+  displayName?: string;
+}
+
+/** @deprecated kept for temporary compatibility while migrating old imports */
+export type OllamaRuntimeStatus = AssistantRuntimeStatus;

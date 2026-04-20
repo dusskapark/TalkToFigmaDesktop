@@ -66,6 +66,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline
 
+      - name: Prepare bundled llama runtime (macOS)
+        run: node scripts/prepare-llama-runtime.mjs --refresh --strict --targets=darwin-arm64,darwin-x64
+
       - name: Verify required environment variables
         run: |
           if [ -z "${{ vars.APPLE_ID }}" ] || [ -z "${{ secrets.APPLE_PASSWORD }}" ] || [ -z "${{ secrets.APPLE_TEAM_ID }}" ] || [ -z "${{ secrets.SIGNING_IDENTITY }}" ]; then
@@ -212,6 +215,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --prefer-offline
+
+      - name: Prepare bundled llama runtime (Windows)
+        run: node scripts/prepare-llama-runtime.mjs --refresh --strict --targets=windows-x64
 
       - name: Verify environment variables
         shell: bash

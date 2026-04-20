@@ -4,8 +4,6 @@
  * Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
  */
 
-import { dynamicTool, jsonSchema, stepCountIs, streamText, type ModelMessage, type TextPart, type ImagePart } from 'ai';
-import { ollama } from 'ai-sdk-ollama';
 import { v4 as uuidv4 } from 'uuid';
 import { allTools } from '../server/tools';
 import { WebSocketClient } from '../server/shared/websocket-client';
@@ -17,25 +15,26 @@ import type {
   AssistantMessagePart,
   AssistantMessagePartAttachment,
   AssistantMessagePartTool,
+  AssistantModelCatalogItem,
+  AssistantModelUploadRequest,
   AssistantRunEvent,
   AssistantRunLog,
   AssistantRunFinishReason,
+  AssistantRuntimeStatus,
   AssistantThread,
-  OllamaRuntimeStatus,
-  OllamaSetupGuide,
   ToolApprovalRequest,
 } from '../../shared/types';
 import { ASSISTANT_DEFAULT_MODEL, ASSISTANT_LIMITS, ASSISTANT_MAX_STEPS } from './constants';
-import { OllamaGuideService } from './OllamaGuideService';
-import { OllamaRuntimeProbe } from './OllamaRuntimeProbe';
 import { classifyToolSafety } from './ToolSafetyPolicy';
+import { ModelInstallService } from './ModelInstallService';
+import { EmbeddedLlamaRuntimeService } from './EmbeddedLlamaRuntimeService';
 
 type ApprovalResolver = (approved: boolean) => void;
 
 interface AssistantEventHandlers {
   onRunEvent?: (event: AssistantRunEvent) => void;
   onToolApprovalRequired?: (request: ToolApprovalRequest) => void;
-  onRuntimeStatusChanged?: (status: OllamaRuntimeStatus) => void;
+  onRuntimeStatusChanged?: (status: AssistantRuntimeStatus) => void;
 }
 
 interface SendMessageResult {
@@ -44,10 +43,45 @@ interface SendMessageResult {
   error?: string;
 }
 
+interface LlamaToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+interface LlamaToolCall {
+  id?: string;
+  type?: 'function';
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
+}
+
+type LlamaContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
+type LlamaChatMessage =
+  | {
+      role: 'system' | 'user' | 'assistant';
+      content: string | LlamaContentPart[];
+      tool_calls?: LlamaToolCall[];
+    }
+  | {
+      role: 'tool';
+      tool_call_id: string;
+      content: string;
+    };
+
 const ASSISTANT_ATTACHMENT_LIMITS = {
   MAX_FILES: 8,
   MAX_TEXT_CHARS: 12_000,
 } as const;
+
 const VALID_TOOL_PART_STATES: AssistantMessagePartTool['state'][] = [
   'input-streaming',
   'input-available',
@@ -59,8 +93,6 @@ export class AssistantRuntimeService {
   private static instance: AssistantRuntimeService | null = null;
 
   private readonly logger = createLogger('AssistantRuntimeService');
-  private readonly probe = new OllamaRuntimeProbe();
-  private readonly guideService = new OllamaGuideService();
   private readonly wsClient = new WebSocketClient({
     wsPort: 3055,
     autoReconnect: true,
@@ -69,11 +101,30 @@ export class AssistantRuntimeService {
     clientType: 'mcp',
   });
 
+  private readonly modelInstallService: ModelInstallService;
+  private readonly embeddedRuntimeService: EmbeddedLlamaRuntimeService;
+
   private handlers: AssistantEventHandlers = {};
   private activeRuns = new Map<string, AbortController>();
   private pendingApprovals = new Map<string, Map<string, ApprovalResolver>>();
   private runDedupKeys = new Map<string, Set<string>>();
   private runToolCallLogs = new Map<string, AssistantRunLog['toolCalls']>();
+
+  private constructor() {
+    this.modelInstallService = new ModelInstallService({
+      onStateChanged: () => {
+        void this.handleRuntimeStateChanged();
+      },
+    });
+
+    this.embeddedRuntimeService = new EmbeddedLlamaRuntimeService({
+      onStateChanged: () => {
+        void this.handleRuntimeStateChanged();
+      },
+    });
+
+    this.pruneInvalidThreadModels();
+  }
 
   static getInstance(): AssistantRuntimeService {
     if (!AssistantRuntimeService.instance) {
@@ -86,19 +137,81 @@ export class AssistantRuntimeService {
     this.handlers = handlers;
   }
 
-  async getSetupGuide(): Promise<OllamaSetupGuide> {
-    return this.guideService.getSetupGuide();
-  }
-
   async listModels(): Promise<string[]> {
-    return this.probe.listInstalledModels();
+    return this.modelInstallService.getInstalledModels().map((model) => model.id);
   }
 
-  async getRuntimeStatus(threadId?: string): Promise<OllamaRuntimeStatus> {
-    const threadModel = threadId ? this.findThreadById(threadId)?.activeModel ?? null : null;
-    const activeModel = threadModel ?? this.getGlobalActiveModel();
-    const status = await this.probe.getRuntimeStatus(activeModel);
-    return status;
+  async listModelCatalog(): Promise<AssistantModelCatalogItem[]> {
+    return this.modelInstallService.getCatalog();
+  }
+
+  async downloadModel(modelId: string): Promise<{ success: boolean; error?: string }> {
+    const result = await this.modelInstallService.downloadModel(modelId);
+    this.pruneInvalidThreadModels();
+    await this.emitRuntimeStatusChange(this.getLastOpenedThreadId() ?? undefined);
+    return result;
+  }
+
+  async cancelModelDownload(): Promise<{ success: boolean; error?: string }> {
+    const result = this.modelInstallService.cancelDownload();
+    await this.emitRuntimeStatusChange(this.getLastOpenedThreadId() ?? undefined);
+    return result;
+  }
+
+  async uploadModel(payload: AssistantModelUploadRequest): Promise<{ success: boolean; modelId?: string; error?: string }> {
+    const result = await this.modelInstallService.uploadModel(payload);
+    this.pruneInvalidThreadModels();
+    await this.emitRuntimeStatusChange(this.getLastOpenedThreadId() ?? undefined);
+    return result;
+  }
+
+  async deleteModel(modelId: string): Promise<{ success: boolean; error?: string }> {
+    const result = this.modelInstallService.deleteModel(modelId);
+    if (result.success) {
+      await this.embeddedRuntimeService.stop();
+    }
+    this.pruneInvalidThreadModels();
+    await this.emitRuntimeStatusChange(this.getLastOpenedThreadId() ?? undefined);
+    return result;
+  }
+
+  async getRuntimeStatus(threadId?: string): Promise<AssistantRuntimeStatus> {
+    const installedModelDetails = this.modelInstallService.getInstalledModels();
+    const installedModels = installedModelDetails.map((model) => model.id);
+    const recommendedModel = this.modelInstallService.getRecommendedModel();
+    const thread = threadId ? this.findThreadById(threadId) : null;
+    const activeModel = this.resolveActiveModel(thread, installedModels);
+    const activeModelDetail = installedModelDetails.find((model) => model.id === activeModel) ?? null;
+    const downloadSnapshot = this.modelInstallService.getDownloadSnapshot();
+    const runtimeBinaryStatus = this.embeddedRuntimeService.getRuntimeBinaryStatus();
+
+    const modelInstalled = installedModels.length > 0;
+    const health = modelInstalled && runtimeBinaryStatus.ready ? this.embeddedRuntimeService.getHealth() : 'error';
+
+    let error = downloadSnapshot.error ?? this.embeddedRuntimeService.getError();
+    if (!modelInstalled && downloadSnapshot.state !== 'downloading' && downloadSnapshot.state !== 'verifying') {
+      error ??= 'No model is installed yet. Download the recommended model or upload GGUF files in Settings > Model.';
+    } else if (modelInstalled && !runtimeBinaryStatus.ready) {
+      error ??= 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.';
+    }
+
+    return {
+      backend: 'embedded',
+      health,
+      modelInstalled,
+      runtimeBinaryReady: runtimeBinaryStatus.ready,
+      runtimeBinarySource: runtimeBinaryStatus.source,
+      ...(runtimeBinaryStatus.path ? { runtimeBinaryPath: runtimeBinaryStatus.path } : {}),
+      activeModel,
+      installedModels,
+      installedModelDetails,
+      defaultModel: ASSISTANT_DEFAULT_MODEL,
+      recommendedModel,
+      supportsVision: Boolean(activeModelDetail?.supportsVision),
+      downloadState: downloadSnapshot.state,
+      ...(downloadSnapshot.progress ? { downloadProgress: downloadSnapshot.progress } : {}),
+      ...(error ? { error } : {}),
+    };
   }
 
   async createThread(title?: string): Promise<AssistantThread> {
@@ -158,17 +271,24 @@ export class AssistantRuntimeService {
       return { success: false, error: 'Model cannot be empty' };
     }
 
-    const thread = this.findThreadById(threadId);
-    if (!thread) {
-      return { success: false, error: 'Thread not found' };
+    const installed = this.modelInstallService.getInstalledModelById(trimmed);
+    if (!installed) {
+      return { success: false, error: 'Model is not installed' };
     }
 
-    this.updateThread(threadId, {
-      activeModel: trimmed,
-      updatedAt: Date.now(),
-    });
+    const normalizedThreadId = threadId.trim();
+    if (normalizedThreadId) {
+      const thread = this.findThreadById(normalizedThreadId);
+      if (thread) {
+        this.updateThread(normalizedThreadId, {
+          activeModel: trimmed,
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
     this.setGlobalActiveModel(trimmed);
-    await this.emitRuntimeStatusChange(threadId);
+    await this.emitRuntimeStatusChange(normalizedThreadId || undefined);
 
     return { success: true };
   }
@@ -190,20 +310,36 @@ export class AssistantRuntimeService {
     }
 
     const status = await this.getRuntimeStatus(threadId);
-    if (!status.daemonReachable) {
-      return { success: false, error: 'OLLAMA_NOT_READY' };
+    if (!status.modelInstalled) {
+      return { success: false, error: 'MODEL_NOT_INSTALLED' };
+    }
+    if (!status.runtimeBinaryReady) {
+      return { success: false, error: 'RUNTIME_BINARY_MISSING' };
     }
 
-    let activeModel = this.resolveActiveModel(thread, status);
+    const activeModel = this.resolveActiveModel(thread, status.installedModels);
     if (!activeModel) {
       return { success: false, error: 'MODEL_SELECTION_REQUIRED' };
     }
 
-    // Keep default model explicit when available and no model is selected on thread.
-    if (!thread.activeModel && status.defaultModelInstalled) {
-      await this.setActiveModel(threadId, ASSISTANT_DEFAULT_MODEL);
-      activeModel = ASSISTANT_DEFAULT_MODEL;
+    const modelRecord = this.modelInstallService.getInstalledModelById(activeModel);
+    if (!modelRecord) {
+      return { success: false, error: 'MODEL_SELECTION_REQUIRED' };
     }
+
+    const ensureRuntime = await this.embeddedRuntimeService.ensureStarted(modelRecord);
+    if (!ensureRuntime.success) {
+      await this.emitRuntimeStatusChange(threadId);
+      return { success: false, error: ensureRuntime.error ?? 'RUNTIME_NOT_READY' };
+    }
+
+    if (thread.activeModel !== activeModel) {
+      this.updateThread(threadId, {
+        activeModel,
+        updatedAt: Date.now(),
+      });
+    }
+    this.setGlobalActiveModel(activeModel);
 
     const parts: AssistantMessagePart[] = [];
     if (trimmedText) {
@@ -222,6 +358,7 @@ export class AssistantRuntimeService {
     };
     this.appendMessage(message);
     this.touchThread(threadId);
+
     if (thread.title === 'New Chat') {
       const inferredTitle = trimmedText || normalizedAttachments[0]?.name || 'New Chat';
       this.updateThread(threadId, {
@@ -233,7 +370,7 @@ export class AssistantRuntimeService {
     void this.runLoop({
       runId,
       threadId,
-      model: activeModel,
+      modelId: activeModel,
     });
 
     return { success: true, runId };
@@ -260,11 +397,11 @@ export class AssistantRuntimeService {
   private async runLoop({
     runId,
     threadId,
-    model,
+    modelId,
   }: {
     runId: string;
     threadId: string;
-    model: string;
+    modelId: string;
   }): Promise<void> {
     const controller = new AbortController();
     this.activeRuns.set(runId, controller);
@@ -280,39 +417,95 @@ export class AssistantRuntimeService {
     const assistantParts: AssistantMessagePart[] = [];
 
     try {
-      const messages = this.toModelMessages(this.getMessagesForThread(threadId));
-      const tools = this.buildDynamicTools(runId, threadId, assistantParts);
+      const messages = this.toLlamaChatMessages(this.getMessagesForThread(threadId));
+      const tools = this.buildLlamaTools();
+      let reachedStepLimit = true;
 
-      const result = streamText({
-        model: ollama(model),
-        messages,
-        tools,
-        stopWhen: stepCountIs(ASSISTANT_MAX_STEPS),
-        abortSignal: controller.signal,
-        onChunk: async ({ chunk }) => {
-          if (chunk.type === 'text-delta') {
-            assistantText += chunk.text;
-            this.emitRunEvent({
-              type: 'token',
-              runId,
-              textDelta: chunk.text,
-            });
+      for (let step = 0; step < ASSISTANT_MAX_STEPS; step += 1) {
+        if (controller.signal.aborted) {
+          finishReason = 'cancelled';
+          reachedStepLimit = false;
+          break;
+        }
+
+        const installedModel = this.modelInstallService.getInstalledModelById(modelId);
+        if (!installedModel) {
+          throw new Error('Selected model is not installed anymore');
+        }
+
+        const ensureRuntime = await this.embeddedRuntimeService.ensureStarted(installedModel);
+        if (!ensureRuntime.success) {
+          throw new Error(ensureRuntime.error ?? 'Embedded runtime is not ready');
+        }
+
+        const response = await this.embeddedRuntimeService.chatCompletions(
+          {
+            model: this.embeddedRuntimeService.getRuntimeModelName(),
+            messages,
+            tools,
+            tool_choice: 'auto',
+          },
+          controller.signal,
+        );
+
+        const choice = response.choices?.[0];
+        const reply = choice?.message;
+        const content = typeof reply?.content === 'string' ? reply.content : '';
+        if (content) {
+          assistantText += content;
+          this.emitRunEvent({
+            type: 'token',
+            runId,
+            textDelta: content,
+          });
+        }
+
+        const rawToolCalls = Array.isArray(reply?.tool_calls) ? reply.tool_calls : [];
+        if (rawToolCalls.length === 0) {
+          finishReason = 'completed';
+          reachedStepLimit = false;
+          break;
+        }
+
+        const normalizedToolCalls = rawToolCalls.map((toolCall) => ({
+          ...toolCall,
+          id: typeof toolCall.id === 'string' && toolCall.id.trim() ? toolCall.id : uuidv4(),
+        }));
+
+        messages.push({
+          role: 'assistant',
+          content: content || '',
+          tool_calls: normalizedToolCalls,
+        });
+
+        for (const toolCall of normalizedToolCalls) {
+          if (controller.signal.aborted) {
+            finishReason = 'cancelled';
+            reachedStepLimit = false;
+            break;
           }
-        },
-      });
 
-      const finalText = await result.text;
-      if (!assistantText && finalText) {
-        assistantText = finalText;
+          const toolResult = await this.executeToolCall({
+            runId,
+            threadId,
+            assistantParts,
+            toolCall,
+          });
+
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: this.stringifyForModelContext(toolResult, 6000),
+          });
+        }
+
+        if (finishReason === 'cancelled') {
+          break;
+        }
       }
 
-      const steps = await result.steps;
-      if (controller.signal.aborted) {
-        finishReason = 'cancelled';
-      } else if (steps.length >= ASSISTANT_MAX_STEPS) {
+      if (finishReason === 'completed' && reachedStepLimit) {
         finishReason = 'max-steps';
-      } else {
-        finishReason = 'completed';
       }
     } catch (error) {
       if (controller.signal.aborted) {
@@ -357,130 +550,176 @@ export class AssistantRuntimeService {
     }
   }
 
-  private buildDynamicTools(
-    runId: string,
-    threadId: string,
-    assistantParts: AssistantMessagePart[],
-  ): Record<string, ReturnType<typeof dynamicTool>> {
-    const toolMap: Record<string, ReturnType<typeof dynamicTool>> = {};
-
-    for (const toolDefinition of allTools) {
-      toolMap[toolDefinition.name] = dynamicTool({
-        description: toolDefinition.description,
-        inputSchema: jsonSchema(toolDefinition.inputSchema as Record<string, unknown>),
-        execute: async (input: unknown, options): Promise<unknown> => {
-          const toolCallId = String((options as { toolCallId?: string } | undefined)?.toolCallId ?? uuidv4());
-          const params = this.normalizeToolArgs(input);
-          const safety = classifyToolSafety(toolDefinition.name);
-          const dedupeKey = this.buildToolDedupeKey(toolDefinition.name, params);
-
-          this.logRunToolCall(runId, {
-            toolCallId,
-            toolName: toolDefinition.name,
-            args: params,
-            safety,
-          });
-          const inputToolPart = this.upsertToolPart(assistantParts, {
-            toolName: toolDefinition.name,
-            toolCallId,
-            safety,
-            state: 'input-available',
-            input: params,
-          });
-          this.emitToolPartEvent(runId, inputToolPart);
-
-          // Dedupe repeated tool calls in the same run.
-          const runDedupeSet = this.runDedupKeys.get(runId);
-          if (runDedupeSet && runDedupeSet.has(dedupeKey)) {
-            const duplicateResult = {
-              status: 'duplicate_tool_call_blocked',
-              message: 'The same tool call was already attempted in this run.',
-              toolName: toolDefinition.name,
-            };
-            const duplicateToolPart = this.upsertToolPart(assistantParts, {
-              toolName: toolDefinition.name,
-              toolCallId,
-              safety,
-              state: 'output-error',
-              input: params,
-              output: duplicateResult,
-              errorText: duplicateResult.message,
-            });
-            this.emitToolPartEvent(runId, duplicateToolPart);
-            this.updateRunToolCallResult(runId, toolCallId, false);
-            return duplicateResult;
-          }
-          runDedupeSet?.add(dedupeKey);
-
-          if (safety === 'write') {
-            const approved = await this.requestApproval({
-              runId,
-              threadId,
-              toolCallId,
-              toolName: toolDefinition.name,
-              args: params,
-              safety,
-              requestedAt: Date.now(),
-            });
-
-            this.updateRunToolCallApproval(runId, toolCallId, approved);
-
-            if (!approved) {
-              const deniedResult = {
-                status: 'tool_execution_rejected',
-                message: 'tool execution rejected',
-                toolName: toolDefinition.name,
-              };
-              const deniedToolPart = this.upsertToolPart(assistantParts, {
-                toolName: toolDefinition.name,
-                toolCallId,
-                safety,
-                state: 'output-error',
-                input: params,
-                output: deniedResult,
-                errorText: deniedResult.message,
-              });
-              this.emitToolPartEvent(runId, deniedToolPart);
-              this.updateRunToolCallResult(runId, toolCallId, false);
-              return deniedResult;
-            }
-          }
-
-          const commandResult = await this.executeFigmaTool(toolDefinition.name, params);
-          if (commandResult.ok) {
-            const successToolPart = this.upsertToolPart(assistantParts, {
-              toolName: toolDefinition.name,
-              toolCallId,
-              safety,
-              state: 'output-available',
-              input: params,
-              ...(commandResult.result !== undefined ? { output: commandResult.result } : {}),
-            });
-            this.emitToolPartEvent(runId, successToolPart);
-            this.updateRunToolCallResult(runId, toolCallId, true);
-            return commandResult.result;
-          }
-
-          const errorToolPart = this.upsertToolPart(assistantParts, {
-            toolName: toolDefinition.name,
-            toolCallId,
-            safety,
-            state: 'output-error',
-            input: params,
-            errorText: commandResult.error ?? 'Unknown tool execution error',
-          });
-          this.emitToolPartEvent(runId, errorToolPart);
-          this.updateRunToolCallResult(runId, toolCallId, false);
-          return {
-            status: 'tool_execution_error',
-            error: commandResult.error,
-            toolName: toolDefinition.name,
-          };
-        },
-      });
+  private async executeToolCall({
+    runId,
+    threadId,
+    assistantParts,
+    toolCall,
+  }: {
+    runId: string;
+    threadId: string;
+    assistantParts: AssistantMessagePart[];
+    toolCall: LlamaToolCall & { id: string };
+  }): Promise<unknown> {
+    const toolName = toolCall.function?.name?.trim() ?? '';
+    if (!toolName) {
+      return {
+        status: 'tool_execution_error',
+        error: 'Tool name is missing',
+      };
     }
 
-    return toolMap;
+    let parsedInput: unknown = {};
+    const rawArguments = toolCall.function?.arguments;
+    if (typeof rawArguments === 'string' && rawArguments.trim()) {
+      try {
+        parsedInput = JSON.parse(rawArguments);
+      } catch {
+        parsedInput = {
+          raw: rawArguments,
+        };
+      }
+    }
+
+    const params = this.normalizeToolArgs(parsedInput);
+    const safety = classifyToolSafety(toolName);
+    const dedupeKey = this.buildToolDedupeKey(toolName, params);
+    const toolCallId = toolCall.id;
+
+    this.logRunToolCall(runId, {
+      toolCallId,
+      toolName,
+      args: params,
+      safety,
+    });
+
+    const inputToolPart = this.upsertToolPart(assistantParts, {
+      toolName,
+      toolCallId,
+      safety,
+      state: 'input-available',
+      input: params,
+    });
+    this.emitToolPartEvent(runId, inputToolPart);
+
+    const runDedupeSet = this.runDedupKeys.get(runId);
+    if (runDedupeSet && runDedupeSet.has(dedupeKey)) {
+      const duplicateResult = {
+        status: 'duplicate_tool_call_blocked',
+        message: 'The same tool call was already attempted in this run.',
+        toolName,
+      };
+      const duplicateToolPart = this.upsertToolPart(assistantParts, {
+        toolName,
+        toolCallId,
+        safety,
+        state: 'output-error',
+        input: params,
+        output: duplicateResult,
+        errorText: duplicateResult.message,
+      });
+      this.emitToolPartEvent(runId, duplicateToolPart);
+      this.updateRunToolCallResult(runId, toolCallId, false);
+      return duplicateResult;
+    }
+    runDedupeSet?.add(dedupeKey);
+
+    if (!allTools.some((definition) => definition.name === toolName)) {
+      const result = {
+        status: 'tool_not_found',
+        message: `Unknown tool: ${toolName}`,
+        toolName,
+      };
+      const errorPart = this.upsertToolPart(assistantParts, {
+        toolName,
+        toolCallId,
+        safety,
+        state: 'output-error',
+        input: params,
+        output: result,
+        errorText: result.message,
+      });
+      this.emitToolPartEvent(runId, errorPart);
+      this.updateRunToolCallResult(runId, toolCallId, false);
+      return result;
+    }
+
+    if (safety === 'write') {
+      const approved = await this.requestApproval({
+        runId,
+        threadId,
+        toolCallId,
+        toolName,
+        args: params,
+        safety,
+        requestedAt: Date.now(),
+      });
+
+      this.updateRunToolCallApproval(runId, toolCallId, approved);
+
+      if (!approved) {
+        const deniedResult = {
+          status: 'tool_execution_rejected',
+          message: 'tool execution rejected',
+          toolName,
+        };
+        const deniedToolPart = this.upsertToolPart(assistantParts, {
+          toolName,
+          toolCallId,
+          safety,
+          state: 'output-error',
+          input: params,
+          output: deniedResult,
+          errorText: deniedResult.message,
+        });
+        this.emitToolPartEvent(runId, deniedToolPart);
+        this.updateRunToolCallResult(runId, toolCallId, false);
+        return deniedResult;
+      }
+    }
+
+    const commandResult = await this.executeFigmaTool(toolName, params);
+    if (commandResult.ok) {
+      const successToolPart = this.upsertToolPart(assistantParts, {
+        toolName,
+        toolCallId,
+        safety,
+        state: 'output-available',
+        input: params,
+        ...(commandResult.result !== undefined ? { output: commandResult.result } : {}),
+      });
+      this.emitToolPartEvent(runId, successToolPart);
+      this.updateRunToolCallResult(runId, toolCallId, true);
+      return commandResult.result;
+    }
+
+    const errorToolPart = this.upsertToolPart(assistantParts, {
+      toolName,
+      toolCallId,
+      safety,
+      state: 'output-error',
+      input: params,
+      errorText: commandResult.error ?? 'Unknown tool execution error',
+    });
+    this.emitToolPartEvent(runId, errorToolPart);
+    this.updateRunToolCallResult(runId, toolCallId, false);
+
+    return {
+      status: 'tool_execution_error',
+      error: commandResult.error,
+      toolName,
+    };
+  }
+
+  private buildLlamaTools(): LlamaToolDefinition[] {
+    return allTools.map((tool) => ({
+      type: 'function',
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema as Record<string, unknown>,
+      },
+    }));
   }
 
   private async executeFigmaTool(
@@ -630,47 +869,57 @@ export class AssistantRuntimeService {
     this.handlers.onRuntimeStatusChanged?.(status);
   }
 
-  private resolveActiveModel(thread: AssistantThread, status: OllamaRuntimeStatus): string | null {
-    if (thread.activeModel && status.installedModels.includes(thread.activeModel)) {
+  private async handleRuntimeStateChanged(): Promise<void> {
+    await this.emitRuntimeStatusChange(this.getLastOpenedThreadId() ?? undefined);
+  }
+
+  private resolveActiveModel(thread: AssistantThread | null, installedModels: string[]): string | null {
+    if (thread?.activeModel && installedModels.includes(thread.activeModel)) {
       return thread.activeModel;
     }
 
     const globalModel = this.getGlobalActiveModel();
-    if (globalModel && status.installedModels.includes(globalModel)) {
+    if (globalModel && installedModels.includes(globalModel)) {
       return globalModel;
     }
 
-    if (status.defaultModelInstalled) {
+    if (installedModels.includes(ASSISTANT_DEFAULT_MODEL)) {
       return ASSISTANT_DEFAULT_MODEL;
     }
 
-    return null;
+    return installedModels[0] ?? null;
   }
 
-  private toModelMessages(messages: AssistantMessage[]): ModelMessage[] {
-    const modelMessages: ModelMessage[] = [];
+  private toLlamaChatMessages(messages: AssistantMessage[]): LlamaChatMessage[] {
+    const modelMessages: LlamaChatMessage[] = [];
 
     for (const message of messages) {
       if (message.role === 'user') {
-        const userParts: Array<TextPart | ImagePart> = [];
+        const textParts: string[] = [];
+        const richParts: LlamaContentPart[] = [];
+        let hasImagePart = false;
 
         for (const part of message.parts) {
           if (part.type === 'text') {
-            userParts.push({ type: 'text', text: part.text });
+            textParts.push(part.text);
+            richParts.push({ type: 'text', text: part.text });
             continue;
           }
 
           if (part.type === 'attachment') {
             const summary = this.formatAttachmentForModelContext(part);
             if (summary) {
-              userParts.push({ type: 'text', text: summary });
+              textParts.push(summary);
+              richParts.push({ type: 'text', text: summary });
             }
 
             if (part.imageBase64 && part.mimeType.toLowerCase().startsWith('image/')) {
-              userParts.push({
-                type: 'image',
-                image: part.imageBase64,
-                ...(part.mimeType ? { mediaType: part.mimeType } : {}),
+              hasImagePart = true;
+              richParts.push({
+                type: 'image_url',
+                image_url: {
+                  url: `data:${part.mimeType};base64,${part.imageBase64}`,
+                },
               });
             }
             continue;
@@ -679,39 +928,30 @@ export class AssistantRuntimeService {
           if (this.isStandardToolPart(part)) {
             const toolName = part.type.replace(/^tool-/, '');
             if (part.state === 'output-available') {
-              userParts.push({
-                type: 'text',
-                text: `[Tool Result] ${toolName} ${this.stringifyForModelContext(part.output, 2000)}`,
-              });
+              textParts.push(`[Tool Result] ${toolName} ${this.stringifyForModelContext(part.output, 2000)}`);
               continue;
             }
             if (part.state === 'output-error') {
-              userParts.push({
-                type: 'text',
-                text: `[Tool Result] ${toolName} ${part.errorText ?? 'error'}`,
-              });
+              textParts.push(`[Tool Result] ${toolName} ${part.errorText ?? 'error'}`);
               continue;
             }
-            userParts.push({
-              type: 'text',
-              text: `[Tool Call] ${toolName} ${this.stringifyForModelContext(part.input, 1000)}`,
-            });
+            textParts.push(`[Tool Call] ${toolName} ${this.stringifyForModelContext(part.input, 1000)}`);
           }
         }
 
-        if (userParts.length === 0) {
+        if (richParts.length === 0) {
           continue;
         }
 
-        if (userParts.length === 1 && userParts[0]?.type === 'text') {
+        if (!hasImagePart && richParts.length === 1 && richParts[0]?.type === 'text') {
           modelMessages.push({
             role: 'user',
-            content: userParts[0].text,
+            content: richParts[0].text,
           });
         } else {
           modelMessages.push({
             role: 'user',
-            content: userParts,
+            content: richParts,
           });
         }
         continue;
@@ -831,7 +1071,7 @@ export class AssistantRuntimeService {
       return text;
     }
 
-    return `${text.slice(0, maxChars)}…(truncated)`;
+    return `${text.slice(0, maxChars)}...(truncated)`;
   }
 
   private toToolPartType(toolName: string): `tool-${string}` {
@@ -1069,5 +1309,36 @@ export class AssistantRuntimeService {
   private setLastOpenedThreadId(threadId: string): void {
     const store = getStore();
     store.set(STORE_KEYS.ASSISTANT_LAST_OPENED_THREAD_ID, threadId);
+  }
+
+  private getLastOpenedThreadId(): string | null {
+    const value = this.getStoreValue<string | null>(STORE_KEYS.ASSISTANT_LAST_OPENED_THREAD_ID, null);
+    return typeof value === 'string' && value.trim().length > 0 ? value : null;
+  }
+
+  private pruneInvalidThreadModels(): void {
+    const installedIds = new Set(this.modelInstallService.getInstalledModels().map((model) => model.id));
+    const threads = this.getThreads();
+    let changed = false;
+
+    const patched = threads.map((thread) => {
+      if (thread.activeModel && !installedIds.has(thread.activeModel)) {
+        changed = true;
+        return {
+          ...thread,
+          activeModel: null,
+        };
+      }
+      return thread;
+    });
+
+    if (changed) {
+      this.saveThreads(patched);
+    }
+
+    const globalModel = this.getGlobalActiveModel();
+    if (globalModel && !installedIds.has(globalModel)) {
+      this.setGlobalActiveModel(null);
+    }
   }
 }

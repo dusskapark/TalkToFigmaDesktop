@@ -97,8 +97,12 @@ const electronAPI: ElectronAPI = {
 
   assistant: {
     getRuntimeStatus: (threadId?: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_GET_RUNTIME_STATUS, threadId),
-    getSetupGuide: () => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_GET_SETUP_GUIDE),
     listModels: () => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_LIST_MODELS),
+    listModelCatalog: () => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_LIST_MODEL_CATALOG),
+    downloadModel: (modelId: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_DOWNLOAD_MODEL, modelId),
+    cancelModelDownload: () => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_CANCEL_MODEL_DOWNLOAD),
+    uploadModel: (payload) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_UPLOAD_MODEL, payload),
+    deleteModel: (modelId: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_DELETE_MODEL, modelId),
     setActiveModel: (threadId: string, model: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_SET_ACTIVE_MODEL, threadId, model),
     createThread: (title?: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_CREATE_THREAD, title),

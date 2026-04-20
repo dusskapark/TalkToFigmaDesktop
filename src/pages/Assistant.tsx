@@ -4,6 +4,7 @@ import { Check, ChevronDown, Copy, Loader2, Paperclip, Plus, SendHorizontal, Shi
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Progress } from '@/components/ui/progress'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
   ChatContainerContent,
@@ -30,10 +31,9 @@ import type {
   AssistantMessagePart,
   AssistantMessagePartAttachment,
   AssistantMessagePartTool,
+  AssistantRuntimeStatus,
   AssistantRunEvent,
   AssistantThread,
-  OllamaRuntimeStatus,
-  OllamaSetupGuide,
   ToolApprovalRequest,
 } from '@/shared/types'
 
@@ -71,7 +71,7 @@ const TEXT_ATTACHMENT_EXTENSIONS = new Set([
   'sql',
 ])
 
-type AppState = 'ready' | 'needs-setup' | 'needs-model-selection' | 'waiting-approval'
+type AppState = 'ready' | 'needs-model' | 'waiting-approval'
 type ToolPartState = ToolPart['state']
 type PermissionMode = 'run-everything' | 'ask-every-time'
 type AssistantFeedback = 'up' | 'down'
@@ -113,11 +113,14 @@ type RenderableChatItem =
       errorText?: string
     }
 
-function getAppState(runtimeStatus: OllamaRuntimeStatus | null, waitingApproval: boolean): AppState {
-  if (!runtimeStatus?.daemonReachable) return 'needs-setup'
-  if (runtimeStatus.needsModelSelection) return 'needs-model-selection'
+function getAppState(runtimeStatus: AssistantRuntimeStatus | null, waitingApproval: boolean): AppState {
+  if (!runtimeStatus?.modelInstalled) return 'needs-model'
   if (waitingApproval) return 'waiting-approval'
   return 'ready'
+}
+
+function isModelDownloadInProgress(state: AssistantRuntimeStatus['downloadState'] | undefined): boolean {
+  return state === 'downloading' || state === 'verifying'
 }
 
 function isErrorCode(value: string | undefined, code: string): boolean {
@@ -152,15 +155,39 @@ function formatFileSize(sizeBytes: number): string {
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function formatBytes(sizeBytes: number): string {
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let size = sizeBytes
+  let unitIndex = 0
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+  return `${size.toFixed(size >= 100 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+}
+
+function formatEta(seconds: number | null | undefined): string {
+  if (!Number.isFinite(seconds) || !seconds || seconds <= 0) return '-'
+  const totalSeconds = Math.max(0, Math.floor(seconds))
+  const minutes = Math.floor(totalSeconds / 60)
+  const remainingSeconds = totalSeconds % 60
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+    return `${hours}h ${remainingMinutes}m`
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`
+  }
+  return `${remainingSeconds}s`
+}
+
 function summarizeAttachments(attachments: AssistantMessagePartAttachment[]): string {
   if (attachments.length === 0) return ''
   const names = attachments.map((attachment) => attachment.name).slice(0, 2)
   const remainder = attachments.length - names.length
   return remainder > 0 ? `${names.join(', ')} +${remainder} more` : names.join(', ')
-}
-
-function isLikelyVisionModel(model: string): boolean {
-  return /(vision|vl|llava|bakllava|minicpm-v|qwen2(\.5)?-vl|gemma3|gemma4|moondream|pixtral|internvl|phi-3\.5-vision|llama3\.2-vision)/i.test(model)
 }
 
 function isToolPartState(value: unknown): value is ToolPartState {
@@ -466,8 +493,7 @@ function toRenderableItems(messages: AssistantMessage[], liveToolEvents: LiveToo
 }
 
 export function AssistantPage() {
-  const [runtimeStatus, setRuntimeStatus] = useState<OllamaRuntimeStatus | null>(null)
-  const [setupGuide, setSetupGuide] = useState<OllamaSetupGuide | null>(null)
+  const [runtimeStatus, setRuntimeStatus] = useState<AssistantRuntimeStatus | null>(null)
   const [threads, setThreads] = useState<AssistantThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
   const [messages, setMessages] = useState<AssistantMessage[]>([])
@@ -495,6 +521,7 @@ export function AssistantPage() {
 
   const sendLockRef = useRef(false)
   const setupDialogPinnedRef = useRef(false)
+  const setupDialogDismissedRef = useRef(false)
   const shimmerVisibleSinceRef = useRef<number | null>(null)
   const shimmerHideTimerRef = useRef<number | null>(null)
   const copyFeedbackTimerRef = useRef<number | null>(null)
@@ -521,10 +548,15 @@ export function AssistantPage() {
     return null
   }, [renderableItems])
 
-  const isComposerDisabled = !activeThreadId || !!runId || isSending || appState === 'needs-setup'
-  const isSendDisabled = isComposerDisabled || appState === 'needs-model-selection'
+  const isModelDownloading = isModelDownloadInProgress(runtimeStatus?.downloadState)
+  const isRuntimeUnavailable = Boolean(runtimeStatus?.modelInstalled && runtimeStatus.runtimeBinaryReady === false)
+  const runtimeIssueMessage = isRuntimeUnavailable
+    ? (runtimeStatus?.error ?? 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.')
+    : null
+  const isComposerDisabled = !activeThreadId || !!runId || isSending || appState === 'needs-model' || isModelDownloading || isRuntimeUnavailable
+  const isSendDisabled = isComposerDisabled
 
-  const activeModelLabel = activeThread?.activeModel ?? runtimeStatus?.activeModel ?? runtimeStatus?.defaultModel ?? 'gemma4:e4b'
+  const activeModelLabel = activeThread?.activeModel ?? runtimeStatus?.activeModel ?? runtimeStatus?.recommendedModel.id ?? 'gemma4:e4b'
   const installedModels = runtimeStatus?.installedModels ?? []
   const quickSwitchModels = useMemo(() => {
     if (installedModels.length <= MAX_PROMPT_INPUT_MODEL_OPTIONS) {
@@ -538,8 +570,7 @@ export function AssistantPage() {
     return prioritizedModels.slice(0, MAX_PROMPT_INPUT_MODEL_OPTIONS)
   }, [installedModels, activeModelLabel])
   const hasMoreModels = installedModels.length > quickSwitchModels.length
-  const visionModels = useMemo(() => installedModels.filter(isLikelyVisionModel), [installedModels])
-  const selectableModels = visionModels
+  const selectableModels = installedModels
   const canSend = !isSendDisabled && (input.trim().length > 0 || draftAttachments.length > 0)
   const shouldShowPreResponseShimmer = Boolean((runId || isSending) && !streamingText.trim())
   const permissionModeLabel = permissionMode === 'run-everything' ? 'Run everything' : 'Ask every time'
@@ -547,6 +578,12 @@ export function AssistantPage() {
     () => buildReasoningText(liveToolEvents, waitingApproval, approvalRequest),
     [liveToolEvents, waitingApproval, approvalRequest],
   )
+  const recommendedModel = runtimeStatus?.recommendedModel
+  const recommendedTotalBytes = (recommendedModel?.modelSizeBytes ?? 0) + (recommendedModel?.mmprojSizeBytes ?? 0)
+  const downloadProgress = runtimeStatus?.downloadProgress
+  const downloadProgressPercent = downloadProgress && downloadProgress.totalBytes > 0
+    ? Math.min(100, Math.max(0, (downloadProgress.downloadedBytes / downloadProgress.totalBytes) * 100))
+    : 0
 
   useEffect(() => {
     if (shimmerHideTimerRef.current !== null) {
@@ -595,6 +632,7 @@ export function AssistantPage() {
   )
 
   const openSetupDialog = useCallback((pinned = false) => {
+    setupDialogDismissedRef.current = false
     setupDialogPinnedRef.current = pinned
     setSetupDialogOpen(true)
     setModelDialogOpen(false)
@@ -615,17 +653,16 @@ export function AssistantPage() {
     const status = await window.electron.assistant.getRuntimeStatus(threadId)
     setRuntimeStatus(status)
 
-    if (!status.daemonReachable) {
-      openSetupDialog(false)
+    if (!status.modelInstalled) {
+      const shouldAutoOpen = !setupDialogDismissedRef.current && !isModelDownloadInProgress(status.downloadState)
+      if (shouldAutoOpen) {
+        openSetupDialog(false)
+      }
       return status
     }
 
+    setupDialogDismissedRef.current = false
     closeSetupDialogIfAutoManaged()
-
-    if (status.daemonReachable && status.needsModelSelection) {
-      setModelDialogOpen(true)
-      setSelectedModel(status.installedModels.find(isLikelyVisionModel) ?? '')
-    }
 
     return status
   }, [closeSetupDialogIfAutoManaged, openSetupDialog])
@@ -654,13 +691,11 @@ export function AssistantPage() {
 
   useEffect(() => {
     const initialize = async () => {
-      const [guide, existingThreads, savedThreadId, savedPermissionMode] = await Promise.all([
-        window.electron.assistant.getSetupGuide(),
+      const [existingThreads, savedThreadId, savedPermissionMode] = await Promise.all([
         refreshThreads(),
         window.electron.settings.get<string>(LAST_OPENED_THREAD_KEY),
         window.electron.settings.get<string>(PERMISSION_MODE_KEY),
       ])
-      setSetupGuide(guide)
       if (isPermissionMode(savedPermissionMode)) {
         setPermissionMode(savedPermissionMode)
       }
@@ -684,17 +719,16 @@ export function AssistantPage() {
     const unsubscribeStatus = window.electron.assistant.onRuntimeStatusChanged((status) => {
       setRuntimeStatus(status)
 
-      if (!status.daemonReachable) {
-        openSetupDialog(false)
+      if (!status.modelInstalled) {
+        const shouldAutoOpen = !setupDialogDismissedRef.current && !isModelDownloadInProgress(status.downloadState)
+        if (shouldAutoOpen) {
+          openSetupDialog(false)
+        }
         return
       }
 
+      setupDialogDismissedRef.current = false
       closeSetupDialogIfAutoManaged()
-
-      if (status.daemonReachable && status.needsModelSelection) {
-        setModelDialogOpen(true)
-        setSelectedModel(status.installedModels.find(isLikelyVisionModel) ?? '')
-      }
     })
 
     const unsubscribeRunEvent = window.electron.assistant.onRunEvent(async (event: AssistantRunEvent) => {
@@ -874,13 +908,12 @@ export function AssistantPage() {
   const handleSend = async () => {
     if (!activeThreadId || runId || isSending || sendLockRef.current) return
 
-    if (appState === 'needs-model-selection') {
-      setModelDialogOpen(true)
+    if (appState === 'needs-model') {
+      openSetupDialog(false)
       return
     }
-
-    if (appState === 'needs-setup') {
-      openSetupDialog(false)
+    if (isRuntimeUnavailable) {
+      setError(runtimeIssueMessage ?? 'Bundled llama-server runtime is missing.')
       return
     }
 
@@ -916,10 +949,10 @@ export function AssistantPage() {
     try {
       const result = await window.electron.assistant.sendMessage(activeThreadId, messageText, pendingAttachments)
       if (!result.success) {
-        if (isErrorCode(result.error, 'MODEL_SELECTION_REQUIRED')) {
-          setModelDialogOpen(true)
-        } else if (isErrorCode(result.error, 'OLLAMA_NOT_READY')) {
-          setError('Ollama is not reachable. Start `ollama serve` and try again.')
+        if (isErrorCode(result.error, 'MODEL_SELECTION_REQUIRED') || isErrorCode(result.error, 'MODEL_NOT_INSTALLED')) {
+          openSetupDialog(false)
+        } else if (isErrorCode(result.error, 'RUNTIME_BINARY_MISSING')) {
+          setError(runtimeIssueMessage ?? 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.')
         } else {
           setError(result.error ?? 'Failed to send message')
         }
@@ -1030,38 +1063,28 @@ export function AssistantPage() {
 
     try {
       const status = await refreshRuntimeStatus(activeThreadId ?? undefined)
-
-      if (!status.needsModelSelection) {
-        setModelDialogOpen(false)
-        await refreshThreads()
-        return
+      if (status.installedModels.length > 0) {
+        setSelectedModel((current) => (current && status.installedModels.includes(current) ? current : status.installedModels[0]))
       }
-
-      const nextVisionModels = status.installedModels.filter(isLikelyVisionModel)
-      if (nextVisionModels.length > 0) {
-        setSelectedModel((current) => (current && nextVisionModels.includes(current) ? current : nextVisionModels[0]))
-      }
+      await refreshThreads()
     } finally {
       setIsRecheckingModels(false)
     }
   }
 
-  const handleRecheckSetup = async () => {
+  const handleDownloadRecommendedModel = async () => {
+    if (!runtimeStatus?.recommendedModel) return
+
     setIsRecheckingModels(true)
     setError(null)
 
     try {
-      const status = await refreshRuntimeStatus(activeThreadId ?? undefined)
-
-      if (!status.daemonReachable) {
-        openSetupDialog(false)
-        return
+      const result = await window.electron.assistant.downloadModel(runtimeStatus.recommendedModel.id)
+      if (!result.success) {
+        setError(result.error ?? 'Model download failed. Please retry.')
       }
-
-      closeSetupDialog()
-      if (status.daemonReachable && status.needsModelSelection) {
-        setModelDialogOpen(true)
-      }
+      await refreshRuntimeStatus(activeThreadId ?? undefined)
+      await refreshThreads()
     } finally {
       setIsRecheckingModels(false)
     }
@@ -1273,9 +1296,9 @@ export function AssistantPage() {
           </div>
 
           <div>
-            {error ? (
+            {(error ?? runtimeIssueMessage) ? (
               <div className="mx-auto w-full max-w-4xl px-0 md:px-6">
-                <p className="text-destructive mb-2 px-1 text-xs">{error}</p>
+                <p className="text-destructive mb-2 px-1 text-xs">{error ?? runtimeIssueMessage}</p>
               </div>
             ) : null}
 
@@ -1360,7 +1383,7 @@ export function AssistantPage() {
                         )}
                         <DropdownMenuItem
                           onSelect={() => {
-                            if (!runtimeStatus?.daemonReachable) {
+                            if (!runtimeStatus?.modelInstalled) {
                               openSetupDialog(false)
                               return
                             }
@@ -1416,7 +1439,7 @@ export function AssistantPage() {
           <SheetHeader className="pb-2">
             <SheetTitle>Assistant Threads</SheetTitle>
             <SheetDescription>
-              {threads.length} thread{threads.length === 1 ? '' : 's'} · Ollama ({runtimeStatus?.defaultModel ?? 'gemma4:e4b'})
+              {threads.length} thread{threads.length === 1 ? '' : 's'} · Local runtime ({runtimeStatus?.defaultModel ?? 'gemma4:e4b'})
             </SheetDescription>
           </SheetHeader>
 
@@ -1474,84 +1497,84 @@ export function AssistantPage() {
             setSetupDialogOpen(true)
             return
           }
+          if (!runtimeStatus?.modelInstalled) {
+            setupDialogDismissedRef.current = true
+          }
           closeSetupDialog()
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Set up local Ollama</DialogTitle>
+            <DialogTitle>Model Wizard</DialogTitle>
             <DialogDescription>
-              Ollama is required for the local assistant. Complete this onboarding: install Ollama, run it, then install <b>gemma4:e4b</b>.
+              Download the recommended model first. Assistant stays locked until installation is completed.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-1 gap-2">
-              <div className="rounded-md border p-2">
-                <p className="text-muted-foreground text-xs">Ollama API</p>
-                <p className="font-medium">{runtimeStatus?.daemonReachable ? 'Reachable' : 'Not reachable'}</p>
-              </div>
+            <div className="rounded-md border p-3">
+              <p className="text-muted-foreground text-xs">Recommended model</p>
+              <p className="font-medium">{recommendedModel?.displayName ?? 'gemma4:e4b'}</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                {recommendedModel?.id ?? 'gemma4:e4b'} · {formatBytes(recommendedTotalBytes)}
+              </p>
             </div>
 
-            <div className="space-y-1.5 rounded-md border p-3">
-              <p className="font-medium">Onboarding</p>
-              <ol className="space-y-2 pl-5">
-                <li>
-                  <p className="font-medium">Install Ollama</p>
-                  <p className="text-muted-foreground text-xs">
-                    {setupGuide?.steps?.[0] ?? 'Install Ollama from the official website.'}
-                  </p>
-                </li>
-                <li>
-                  <p className="font-medium">Run Ollama</p>
-                  <code className="mt-1 block rounded bg-muted px-2 py-1 text-xs">
-                    {setupGuide?.serveCommand ?? 'ollama serve'}
-                  </code>
-                </li>
-                <li>
-                  <p className="font-medium">Install default model</p>
-                  <code className="mt-1 block rounded bg-muted px-2 py-1 text-xs">
-                    {setupGuide?.pullCommand ?? 'ollama pull gemma4:e4b'}
-                  </code>
-                  <code className="mt-1 block rounded bg-muted px-2 py-1 text-xs">
-                    {setupGuide?.verifyCommand ?? 'ollama list'}
-                  </code>
-                </li>
-              </ol>
+            <div className="rounded-md border p-3">
+              <p className="font-medium">Install status</p>
+              <p className="text-muted-foreground mt-1 text-xs capitalize">
+                {runtimeStatus?.downloadState ?? 'idle'}
+              </p>
+
+              {downloadProgress ? (
+                <div className="mt-3 space-y-2">
+                  <Progress value={downloadProgressPercent} />
+                  <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                    <span>{formatBytes(downloadProgress.downloadedBytes)} / {formatBytes(downloadProgress.totalBytes)}</span>
+                    <span>{formatBytes(downloadProgress.speedBytesPerSecond)}/s</span>
+                    <span>ETA {formatEta(downloadProgress.etaSeconds)}</span>
+                    {downloadProgress.currentFile ? <span>{downloadProgress.currentFile}</span> : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {runtimeStatus?.error ? (
+                <p className="text-destructive mt-2 text-xs">{runtimeStatus.error}</p>
+              ) : null}
             </div>
           </div>
           <DialogFooter>
-            {setupGuide ? (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  void window.electron.shell.openExternal(setupGuide.installUrl)
-                }}
-              >
-                Open Guide
+            {runtimeStatus?.modelInstalled ? (
+              <Button variant="outline" onClick={closeSetupDialog}>
+                Close
               </Button>
-            ) : null}
-            <Button variant="outline" onClick={() => void handleRecheckSetup()} disabled={isRecheckingModels}>
-              {isRecheckingModels ? <Loader2 className="size-4 animate-spin" /> : null}
-              {isRecheckingModels ? 'Checking...' : 'Recheck'}
-            </Button>
+            ) : (
+              <Button
+                onClick={() => void handleDownloadRecommendedModel()}
+                disabled={isRecheckingModels || runtimeStatus?.downloadState === 'downloading' || runtimeStatus?.downloadState === 'verifying'}
+              >
+                {isRecheckingModels || runtimeStatus?.downloadState === 'downloading' || runtimeStatus?.downloadState === 'verifying'
+                  ? <Loader2 className="size-4 animate-spin" />
+                  : null}
+                {runtimeStatus?.downloadState === 'failed'
+                  ? 'Retry Download'
+                  : runtimeStatus?.downloadState === 'downloading' || runtimeStatus?.downloadState === 'verifying'
+                    ? 'Downloading...'
+                    : 'Download Recommended Model'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog
         open={modelDialogOpen}
-        onOpenChange={(open) => {
-          if (!open && runtimeStatus?.daemonReachable && runtimeStatus?.needsModelSelection) {
-            return
-          }
-          setModelDialogOpen(open)
-        }}
+        onOpenChange={setModelDialogOpen}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Select a model</DialogTitle>
             <DialogDescription>
-              Choose a locally installed Ollama model. A <b>multimodal reasoning model</b> is recommended for image-based tasks.
+              Choose an installed model for this thread. You can upload GGUF(+mmproj) models in Settings &gt; Model.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -1568,16 +1591,9 @@ export function AssistantPage() {
                 ))}
               </select>
             ) : null}
-            {visionModels.length === 0 && installedModels.length > 0 ? (
-              <p className="text-muted-foreground text-sm">
-                No vision model detected. Install a vision-capable model such as <code>qwen2.5-vl</code>, <code>llava</code>, or <code>gemma3</code>.
-              </p>
-            ) : null}
             {installedModels.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                {runtimeStatus?.daemonReachable
-                  ? 'No local models were found. Pull a model in Ollama, then click Recheck.'
-                  : 'Ollama is installed, but the daemon is not reachable. Start `ollama serve`, then click Recheck.'}
+                No model is installed. Use Model Wizard first, then return.
               </p>
             ) : null}
           </div>

@@ -11,7 +11,7 @@ import * as storeUtils from './utils/store';
 import type {
   AssistantRunEvent,
   FigmaAuthState,
-  OllamaRuntimeStatus,
+  AssistantRuntimeStatus,
   ServerState,
   ToolApprovalRequest,
   UpdateCapabilities,
@@ -47,7 +47,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     onToolApprovalRequired: (request: ToolApprovalRequest) => {
       emitToRenderer(mainWindow, IPC_CHANNELS.ASSISTANT_TOOL_APPROVAL_REQUIRED, request);
     },
-    onRuntimeStatusChanged: (status: OllamaRuntimeStatus) => {
+    onRuntimeStatusChanged: (status: AssistantRuntimeStatus) => {
       emitToRenderer(mainWindow, IPC_CHANNELS.ASSISTANT_RUNTIME_STATUS_CHANGED, status);
     },
   });
@@ -247,12 +247,32 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return assistantRuntime.getRuntimeStatus(threadId);
   });
 
-  ipcMain.handle(IPC_CHANNELS.ASSISTANT_GET_SETUP_GUIDE, async () => {
-    return assistantRuntime.getSetupGuide();
-  });
-
   ipcMain.handle(IPC_CHANNELS.ASSISTANT_LIST_MODELS, async () => {
     return assistantRuntime.listModels();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_LIST_MODEL_CATALOG, async () => {
+    return assistantRuntime.listModelCatalog();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_DOWNLOAD_MODEL, async (_event: IpcMainInvokeEvent, modelId: string) => {
+    return assistantRuntime.downloadModel(modelId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_CANCEL_MODEL_DOWNLOAD, async () => {
+    return assistantRuntime.cancelModelDownload();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_UPLOAD_MODEL, async (_event: IpcMainInvokeEvent, payload: {
+    ggufPath: string;
+    mmprojPath?: string;
+    displayName?: string;
+  }) => {
+    return assistantRuntime.uploadModel(payload);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_DELETE_MODEL, async (_event: IpcMainInvokeEvent, modelId: string) => {
+    return assistantRuntime.deleteModel(modelId);
   });
 
   ipcMain.handle(IPC_CHANNELS.ASSISTANT_SET_ACTIVE_MODEL, async (_event: IpcMainInvokeEvent, threadId: string, model: string) => {
@@ -299,7 +319,30 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
 // Helper to emit events to renderer
 export function emitToRenderer(mainWindow: BrowserWindow, channel: string, data: unknown): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(channel, data);
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  const webContents = mainWindow.webContents;
+  if (!webContents || webContents.isDestroyed() || webContents.isCrashed()) {
+    return;
+  }
+
+  const mainFrame = webContents.mainFrame;
+  if (!mainFrame || mainFrame.isDestroyed()) {
+    return;
+  }
+
+  try {
+    webContents.send(channel, data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.includes('Render frame was disposed before WebFrameMain could be accessed')
+      || message.includes('Object has been destroyed')
+    ) {
+      return;
+    }
+    logger.warn(`Failed to emit IPC event "${channel}"`, { error: message });
   }
 }

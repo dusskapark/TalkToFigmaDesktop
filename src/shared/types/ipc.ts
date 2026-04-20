@@ -5,10 +5,11 @@ import type { FigmaAuthState, FigmaUser } from './figma';
 import type {
   AssistantMessagePartAttachment,
   AssistantMessage,
+  AssistantModelCatalogItem,
+  AssistantModelUploadRequest,
   AssistantRunEvent,
+  AssistantRuntimeStatus,
   AssistantThread,
-  OllamaRuntimeStatus,
-  OllamaSetupGuide,
   ToolApprovalRequest,
 } from './assistant';
 
@@ -38,7 +39,7 @@ export interface MainToRendererEvents {
   };
   'log:entry': LogEntry;
   'tray:navigate-to-page': 'assistant' | 'terminal' | 'settings' | 'help';
-  'assistant:runtime-status-changed': OllamaRuntimeStatus;
+  'assistant:runtime-status-changed': AssistantRuntimeStatus;
   'assistant:run-event': AssistantRunEvent;
   'assistant:tool-approval-required': ToolApprovalRequest;
 }
@@ -74,9 +75,15 @@ export interface RendererToMainInvocations {
   'update:get-capabilities': () => Promise<UpdateCapabilities>;
 
   // Assistant
-  'assistant:get-runtime-status': (threadId?: string) => Promise<OllamaRuntimeStatus>;
-  'assistant:get-setup-guide': () => Promise<OllamaSetupGuide>;
+  'assistant:get-runtime-status': (threadId?: string) => Promise<AssistantRuntimeStatus>;
   'assistant:list-models': () => Promise<string[]>;
+  'assistant:list-model-catalog': () => Promise<AssistantModelCatalogItem[]>;
+  'assistant:download-model': (modelId: string) => Promise<{ success: boolean; error?: string }>;
+  'assistant:cancel-model-download': () => Promise<{ success: boolean; error?: string }>;
+  'assistant:upload-model': (
+    payload: AssistantModelUploadRequest,
+  ) => Promise<{ success: boolean; modelId?: string; error?: string }>;
+  'assistant:delete-model': (modelId: string) => Promise<{ success: boolean; error?: string }>;
   'assistant:set-active-model': (threadId: string, model: string) => Promise<{ success: boolean; error?: string }>;
   'assistant:create-thread': (title?: string) => Promise<AssistantThread>;
   'assistant:list-threads': () => Promise<AssistantThread[]>;
@@ -170,9 +177,15 @@ export interface ElectronAPI {
   };
 
   assistant: {
-    getRuntimeStatus: (threadId?: string) => Promise<OllamaRuntimeStatus>;
-    getSetupGuide: () => Promise<OllamaSetupGuide>;
+    getRuntimeStatus: (threadId?: string) => Promise<AssistantRuntimeStatus>;
     listModels: () => Promise<string[]>;
+    listModelCatalog: () => Promise<AssistantModelCatalogItem[]>;
+    downloadModel: (modelId: string) => Promise<{ success: boolean; error?: string }>;
+    cancelModelDownload: () => Promise<{ success: boolean; error?: string }>;
+    uploadModel: (
+      payload: AssistantModelUploadRequest,
+    ) => Promise<{ success: boolean; modelId?: string; error?: string }>;
+    deleteModel: (modelId: string) => Promise<{ success: boolean; error?: string }>;
     setActiveModel: (threadId: string, model: string) => Promise<{ success: boolean; error?: string }>;
     createThread: (title?: string) => Promise<AssistantThread>;
     listThreads: () => Promise<AssistantThread[]>;

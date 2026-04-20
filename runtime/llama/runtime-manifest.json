@@ -1,0 +1,46 @@
+{
+  "source": {
+    "owner": "ggml-org",
+    "repo": "llama.cpp"
+  },
+  "release": {
+    "tag": "b8855",
+    "name": "b8855",
+    "publishedAt": "2026-04-20T12:55:44Z",
+    "url": "https://github.com/ggml-org/llama.cpp/releases/tag/b8855"
+  },
+  "platforms": {
+    "darwin-arm64": {
+      "assetName": "llama-b8855-bin-macos-arm64.tar.gz",
+      "assetUrl": "https://github.com/ggml-org/llama.cpp/releases/download/b8855/llama-b8855-bin-macos-arm64.tar.gz",
+      "assetSha256": "b01357ce84a434bbc45e9f838b5620a635de63ceef305829e725f8c70a032c37",
+      "lastResolvedAt": "2026-04-20T15:20:36.251Z",
+      "binaryRelativePath": "bin/darwin-arm64/llama-server",
+      "binarySha256": "07cc25e06d71512b462057e25142cf41b43746882b4ef30297cf274f44161d26",
+      "preparedAt": "2026-04-20T15:36:51.799Z",
+      "runtimeDependencyCount": 27
+    },
+    "darwin-x64": {
+      "assetName": "llama-b8855-bin-macos-x64.tar.gz",
+      "assetUrl": "https://github.com/ggml-org/llama.cpp/releases/download/b8855/llama-b8855-bin-macos-x64.tar.gz",
+      "assetSha256": "5f229b3a815280737f2e8b93b49d8ca9c6d0d87bddb280c69266ea1a06daa3e2",
+      "lastResolvedAt": "2026-04-20T15:20:36.252Z"
+    },
+    "windows-x64": {
+      "assetName": "llama-b8855-bin-win-cpu-x64.zip",
+      "assetUrl": "https://github.com/ggml-org/llama.cpp/releases/download/b8855/llama-b8855-bin-win-cpu-x64.zip",
+      "assetSha256": "58b4f3f56250b8b2025c65964464b887d0f241e6f95577b2fdb84b14d4979b20",
+      "lastResolvedAt": "2026-04-20T15:20:36.252Z",
+      "binaryRelativePath": "bin/windows-x64/llama-server.exe",
+      "binarySha256": "ea2239a647e835b1c9640694520211d5807daae795aff6d2c398ac8ac99efe64",
+      "preparedAt": "2026-04-20T15:20:43.283Z"
+    },
+    "windows-arm64": {
+      "assetName": "llama-b8855-bin-win-cpu-arm64.zip",
+      "assetUrl": "https://github.com/ggml-org/llama.cpp/releases/download/b8855/llama-b8855-bin-win-cpu-arm64.zip",
+      "assetSha256": "64a7416cc56b317439f922a460c08091c38ac7c7cbd0a8b93974f9d1a45a9981",
+      "lastResolvedAt": "2026-04-20T15:20:36.252Z"
+    }
+  },
+  "updatedAt": "2026-04-20T15:36:51.802Z"
+}

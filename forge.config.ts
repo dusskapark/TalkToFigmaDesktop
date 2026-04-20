@@ -29,6 +29,7 @@ const config: ForgeConfig = {
     icon: './public/icon', // Electron Forge will append .icns, .ico, .png automatically
     extraResource: [
       './public',
+      './runtime/llama',
     ],
     // Code signing configuration (uses .env locally, CI environment variables in automation)
     osxSign: (isMAS ? {
@@ -74,83 +75,116 @@ const config: ForgeConfig = {
   // Hooks for post-processing after packaging
   hooks: {
     postPackage: async (_config, options) => {
-      // Only run for MAS builds on macOS
-      if (!isMAS || options.platform !== 'mas') {
+      const isMacBuild = options.platform === 'darwin' || options.platform === 'mas';
+      if (!isMacBuild) {
         return;
       }
 
-      console.log('[postPackage] Re-signing helper apps with correct entitlements for MAS...');
-
       const outputDir = options.outputPaths[0];
-      const identity = process.env.SIGNING_IDENTITY_APPSTORE || 'Apple Distribution';
-      const childEntitlements = path.resolve('entitlements.child.plist');
-      const mainEntitlements = path.resolve('entitlements.mas.plist');
-      const teamId = process.env.APPLE_TEAM_ID || '';
-      const bundleId = (_config as any).packagerConfig.appBundleId || 'com.grabtaxi.klever';
-
-      // Find the .app bundle inside the output directory
       const items = fs.readdirSync(outputDir);
       const appBundle = items.find(item => item.endsWith('.app'));
-
       if (!appBundle) {
-        console.log('[postPackage] No .app bundle found in output directory, skipping');
-        return;
+        throw new Error('[postPackage] No .app bundle found in output directory');
       }
 
       const appPath = path.join(outputDir, appBundle);
       const frameworksPath = path.join(appPath, 'Contents', 'Frameworks');
+      const runtimeRoot = path.join(appPath, 'Contents', 'Resources', 'llama', 'bin');
 
-      console.log(`[postPackage] App bundle: ${appPath}`);
-      console.log(`[postPackage] Frameworks path: ${frameworksPath}`);
+      const runtimeArtifacts = fs.existsSync(runtimeRoot)
+        ? fs.readdirSync(runtimeRoot)
+          .flatMap((platformDir) => {
+            const platformDirPath = path.join(runtimeRoot, platformDir);
+            if (!fs.existsSync(platformDirPath) || !fs.statSync(platformDirPath).isDirectory()) {
+              return [];
+            }
 
-      if (!fs.existsSync(frameworksPath)) {
-        console.log('[postPackage] No Frameworks directory found, skipping helper re-signing');
-        return;
+            return fs.readdirSync(platformDirPath)
+              .map((entry) => path.join(platformDirPath, entry))
+              .filter((artifactPath) => {
+                if (!fs.existsSync(artifactPath)) {
+                  return false;
+                }
+                const stat = fs.lstatSync(artifactPath);
+                if (!stat.isFile()) {
+                  return false;
+                }
+
+                const lowerName = path.basename(artifactPath).toLowerCase();
+                return lowerName === 'llama-server'
+                  || lowerName === 'llama-server.exe'
+                  || lowerName.endsWith('.dylib')
+                  || lowerName.endsWith('.so');
+              });
+          })
+        : [];
+
+      if (runtimeArtifacts.length === 0) {
+        throw new Error('[postPackage] Bundled llama runtime artifacts were not found in app package');
       }
 
-      // Find all helper apps
-      const frameworkItems = fs.readdirSync(frameworksPath);
-      const helperApps = frameworkItems.filter(item => item.endsWith('.app'));
+      const runtimeDynamicLibraries = runtimeArtifacts.filter((artifactPath) => {
+        const lowerName = path.basename(artifactPath).toLowerCase();
+        return lowerName.endsWith('.dylib') || lowerName.endsWith('.so');
+      });
+      if (runtimeDynamicLibraries.length === 0) {
+        throw new Error('[postPackage] Bundled llama runtime dynamic libraries were not found in app package');
+      }
 
-      console.log(`[postPackage] Found ${helperApps.length} helper apps to re-sign`);
+      if (isMAS && options.platform === 'mas') {
+        console.log('[postPackage] Re-signing helper apps and bundled runtime for MAS...');
+        const identity = process.env.SIGNING_IDENTITY_APPSTORE || 'Apple Distribution';
+        const childEntitlements = path.resolve('entitlements.child.plist');
+        const mainEntitlements = path.resolve('entitlements.mas.plist');
+        const teamId = process.env.APPLE_TEAM_ID || '';
+        const bundleId = (_config as any).packagerConfig.appBundleId || 'com.grabtaxi.klever';
 
-      for (const helperApp of helperApps) {
-        const helperPath = path.join(frameworksPath, helperApp);
-        console.log(`[postPackage] Re-signing helper: ${helperApp}`);
+        console.log(`[postPackage] App bundle: ${appPath}`);
+        console.log(`[postPackage] Frameworks path: ${frameworksPath}`);
 
-        try {
-          // Re-sign the helper app with child entitlements (inherit only)
+        if (!fs.existsSync(frameworksPath)) {
+          console.log('[postPackage] No Frameworks directory found, skipping helper re-signing');
+        } else {
+          // Find all helper apps
+          const frameworkItems = fs.readdirSync(frameworksPath);
+          const helperApps = frameworkItems.filter(item => item.endsWith('.app'));
+
+          console.log(`[postPackage] Found ${helperApps.length} helper apps to re-sign`);
+
+          for (const helperApp of helperApps) {
+            const helperPath = path.join(frameworksPath, helperApp);
+            console.log(`[postPackage] Re-signing helper: ${helperApp}`);
+
+            try {
+              // Re-sign the helper app with child entitlements (inherit only)
+              execSync(
+                `codesign --force --sign "${identity}" --entitlements "${childEntitlements}" --timestamp=none "${helperPath}"`,
+                { stdio: 'inherit' }
+              );
+              console.log(`[postPackage] ✅ Successfully re-signed: ${helperApp}`);
+            } catch (error) {
+              console.error(`[postPackage] ❌ Failed to re-sign ${helperApp}:`, error);
+              throw error;
+            }
+          }
+        }
+
+        for (const runtimeBinaryPath of runtimeArtifacts) {
+          console.log(`[postPackage] Re-signing bundled runtime artifact: ${runtimeBinaryPath}`);
           execSync(
-            `codesign --force --sign "${identity}" --entitlements "${childEntitlements}" --timestamp=none "${helperPath}"`,
+            `codesign --force --sign "${identity}" --entitlements "${childEntitlements}" --timestamp=none "${runtimeBinaryPath}"`,
             { stdio: 'inherit' }
           );
-          console.log(`[postPackage] ✅ Successfully re-signed: ${helperApp}`);
-
-          // Verify the entitlements were applied
-          try {
-            const verifyOutput = execSync(
-              `codesign -d --entitlements - "${helperPath}" 2>&1`,
-              { encoding: 'utf8' }
-            );
-            console.log(`[postPackage] Verifying entitlements for ${helperApp}:`);
-            console.log(verifyOutput);
-          } catch (verifyError) {
-            console.error(`[postPackage] ⚠️  Failed to verify entitlements for ${helperApp}:`, verifyError);
-          }
-        } catch (error) {
-          console.error(`[postPackage] ❌ Failed to re-sign ${helperApp}:`, error);
-          throw error;
         }
-      }
 
-      // Re-sign the main app to update the seal after helper modifications
-      console.log('[postPackage] Re-signing main app to update seal...');
-      try {
-        // Create enhanced entitlements with application identifier for TestFlight
-        const mainEntitlementsContent = fs.readFileSync(mainEntitlements, 'utf8');
-        const enhancedEntitlements = mainEntitlementsContent.replace(
-          '</dict>',
-          `    <!-- Required for TestFlight distribution -->
+        // Re-sign the main app to update the seal after helper/runtime modifications
+        console.log('[postPackage] Re-signing main app to update seal...');
+        try {
+          // Create enhanced entitlements with application identifier for TestFlight
+          const mainEntitlementsContent = fs.readFileSync(mainEntitlements, 'utf8');
+          const enhancedEntitlements = mainEntitlementsContent.replace(
+            '</dict>',
+            `    <!-- Required for TestFlight distribution -->
     <key>com.apple.application-identifier</key>
     <string>${teamId}.${bundleId}</string>
     <key>com.apple.developer.team-identifier</key>
@@ -160,26 +194,32 @@ const config: ForgeConfig = {
         <string>${teamId}.${bundleId}</string>
     </array>
 </dict>`
-        );
+          );
 
-        const tempEntitlements = path.join(outputDir, 'temp-entitlements.plist');
-        fs.writeFileSync(tempEntitlements, enhancedEntitlements);
+          const tempEntitlements = path.join(outputDir, 'temp-entitlements.plist');
+          fs.writeFileSync(tempEntitlements, enhancedEntitlements);
 
-        execSync(
-          `codesign --force --sign "${identity}" --entitlements "${tempEntitlements}" --timestamp=none "${appPath}"`,
-          { stdio: 'inherit' }
-        );
+          execSync(
+            `codesign --force --sign "${identity}" --entitlements "${tempEntitlements}" --timestamp=none "${appPath}"`,
+            { stdio: 'inherit' }
+          );
 
-        // Clean up temp file
-        fs.unlinkSync(tempEntitlements);
+          // Clean up temp file
+          fs.unlinkSync(tempEntitlements);
 
-        console.log('[postPackage] ✅ Successfully re-signed main app');
-      } catch (error) {
-        console.error('[postPackage] ❌ Failed to re-sign main app:', error);
-        throw error;
+          console.log('[postPackage] ✅ Successfully re-signed main app');
+        } catch (error) {
+          console.error('[postPackage] ❌ Failed to re-sign main app:', error);
+          throw error;
+        }
       }
 
-      console.log('[postPackage] Helper re-signing complete');
+      for (const runtimeBinaryPath of runtimeArtifacts) {
+        console.log(`[postPackage] Verifying bundled runtime signature: ${runtimeBinaryPath}`);
+        execSync(`codesign --verify --verbose=2 "${runtimeBinaryPath}"`, { stdio: 'inherit' });
+      }
+
+      console.log('[postPackage] Bundled runtime verification complete');
     },
   },
   makers: [

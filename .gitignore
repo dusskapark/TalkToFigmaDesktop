@@ -34,6 +34,10 @@ Thumbs.db
 .npm
 .eslintcache
 
+# Bundled llama runtime binaries (generated)
+runtime/llama/bin/*
+!runtime/llama/bin/.gitkeep
+
 # Apple Developer certificates and profiles
 *.p12
 *.pem

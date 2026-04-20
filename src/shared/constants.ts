@@ -88,8 +88,12 @@ export const IPC_CHANNELS = {
 
   // Assistant
   ASSISTANT_GET_RUNTIME_STATUS: 'assistant:get-runtime-status',
-  ASSISTANT_GET_SETUP_GUIDE: 'assistant:get-setup-guide',
   ASSISTANT_LIST_MODELS: 'assistant:list-models',
+  ASSISTANT_LIST_MODEL_CATALOG: 'assistant:list-model-catalog',
+  ASSISTANT_DOWNLOAD_MODEL: 'assistant:download-model',
+  ASSISTANT_CANCEL_MODEL_DOWNLOAD: 'assistant:cancel-model-download',
+  ASSISTANT_UPLOAD_MODEL: 'assistant:upload-model',
+  ASSISTANT_DELETE_MODEL: 'assistant:delete-model',
   ASSISTANT_SET_ACTIVE_MODEL: 'assistant:set-active-model',
   ASSISTANT_CREATE_THREAD: 'assistant:create-thread',
   ASSISTANT_LIST_THREADS: 'assistant:list-threads',
@@ -128,6 +132,8 @@ export const STORE_KEYS = {
   ASSISTANT_RUN_LOGS: 'assistant.runLogs',
   ASSISTANT_LAST_OPENED_THREAD_ID: 'assistant.lastOpenedThreadId',
   ASSISTANT_ACTIVE_MODEL: 'assistant.activeModel',
+  ASSISTANT_MODEL_REGISTRY: 'assistant.modelRegistry',
+  ASSISTANT_MODEL_DOWNLOAD_STATUS: 'assistant.modelDownloadStatus',
 
   // Analytics
   ANALYTICS_CLIENT_ID: 'analytics.clientId',
