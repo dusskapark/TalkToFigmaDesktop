@@ -134,10 +134,24 @@ export const STORE_KEYS = {
   ASSISTANT_ACTIVE_MODEL: 'assistant.activeModel',
   ASSISTANT_MODEL_REGISTRY: 'assistant.modelRegistry',
   ASSISTANT_MODEL_DOWNLOAD_STATUS: 'assistant.modelDownloadStatus',
+  ASSISTANT_CONTEXT_LENGTH: 'assistant.contextLength',
+  ASSISTANT_TOOL_RESULT_LIMIT_CURRENT: 'assistant.toolResultLimitCurrent',
+  ASSISTANT_TOOL_RESULT_LIMIT_HISTORY: 'assistant.toolResultLimitHistory',
 
   // Analytics
   ANALYTICS_CLIENT_ID: 'analytics.clientId',
   ANALYTICS_FIRST_OPEN_SENT: 'analytics.firstOpenSent',
+} as const;
+
+export const ASSISTANT_CONTEXT_LENGTH = {
+  DEFAULT: 16_384,
+  OPTIONS: [4_096, 8_192, 16_384, 32_768, 65_536, 131_072, 262_144],
+} as const;
+
+export const ASSISTANT_TOOL_RESULT_LIMITS = {
+  CURRENT_DEFAULT: 8_192,
+  HISTORY_DEFAULT: 4_096,
+  OPTIONS: [4_096, 8_192, 16_384, 32_768, 65_536, 131_072, 262_144],
 } as const;
 
 // App metadata

@@ -6,7 +6,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import ElectronStore from 'electron-store';
-import { STORE_KEYS } from '../../shared/constants';
+import { ASSISTANT_CONTEXT_LENGTH, ASSISTANT_TOOL_RESULT_LIMITS, STORE_KEYS } from '../../shared/constants';
 import type { FigmaAuthTokens, FigmaUser } from '../../shared/types';
 
 // Create store instance - use 'any' to avoid ESM/CJS compatibility issues with electron-store types
@@ -17,6 +17,9 @@ const store: any = new (ElectronStore as any)({
     'app.theme': 'system',
     'app.firstLaunch': true,
     'app.showTutorial': true,
+    [STORE_KEYS.ASSISTANT_CONTEXT_LENGTH]: ASSISTANT_CONTEXT_LENGTH.DEFAULT,
+    [STORE_KEYS.ASSISTANT_TOOL_RESULT_LIMIT_CURRENT]: ASSISTANT_TOOL_RESULT_LIMITS.CURRENT_DEFAULT,
+    [STORE_KEYS.ASSISTANT_TOOL_RESULT_LIMIT_HISTORY]: ASSISTANT_TOOL_RESULT_LIMITS.HISTORY_DEFAULT,
   },
 });
 

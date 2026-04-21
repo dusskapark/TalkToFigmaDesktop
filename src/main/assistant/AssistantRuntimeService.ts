@@ -8,8 +8,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { allTools } from '../server/tools';
 import { WebSocketClient } from '../server/shared/websocket-client';
 import { createLogger } from '../utils/logger';
-import { getStore } from '../utils/store';
-import { isChannelNotRequired, STORE_KEYS } from '../../shared/constants';
+import { getSetting, getStore } from '../utils/store';
+import { ASSISTANT_TOOL_RESULT_LIMITS, isChannelNotRequired, STORE_KEYS } from '../../shared/constants';
 import type {
   AssistantMessage,
   AssistantMessagePart,
@@ -27,7 +27,7 @@ import type {
 import { ASSISTANT_DEFAULT_MODEL, ASSISTANT_LIMITS, ASSISTANT_MAX_STEPS } from './constants';
 import { classifyToolSafety } from './ToolSafetyPolicy';
 import { ModelInstallService } from './ModelInstallService';
-import { EmbeddedLlamaRuntimeService } from './EmbeddedLlamaRuntimeService';
+import { EmbeddedLlamaRuntimeService, ExceedContextSizeError } from './EmbeddedLlamaRuntimeService';
 
 type ApprovalResolver = (approved: boolean) => void;
 
@@ -438,20 +438,66 @@ export class AssistantRuntimeService {
           throw new Error(ensureRuntime.error ?? 'Embedded runtime is not ready');
         }
 
-        const response = await this.embeddedRuntimeService.chatCompletions(
-          {
-            model: this.embeddedRuntimeService.getRuntimeModelName(),
-            messages,
-            tools,
-            tool_choice: 'auto',
-          },
-          controller.signal,
-        );
+        let receivedStepText = false;
+        let response;
+        const attemptedContextLengths = new Set<number>();
+        while (true) {
+          try {
+            response = await this.embeddedRuntimeService.chatCompletions(
+              {
+                model: this.embeddedRuntimeService.getRuntimeModelName(),
+                messages,
+                tools,
+                tool_choice: 'auto',
+              },
+              controller.signal,
+              (textDelta) => {
+                receivedStepText = true;
+                assistantText += textDelta;
+                this.emitRunEvent({
+                  type: 'token',
+                  runId,
+                  textDelta,
+                });
+              },
+            );
+            break;
+          } catch (error) {
+            if (!(error instanceof ExceedContextSizeError)) {
+              throw error;
+            }
+
+            const nextContextLength = this.embeddedRuntimeService.increaseContextLengthForPrompt(
+              error.promptTokens,
+              error.currentContext,
+            );
+
+            if (!nextContextLength) {
+              throw error;
+            }
+
+            if (attemptedContextLengths.has(nextContextLength)) {
+              throw new Error(
+                `Assistant runtime could not restart with a larger context window (${nextContextLength}).`,
+              );
+            }
+            attemptedContextLengths.add(nextContextLength);
+
+            this.logger.warn(
+              `Retrying assistant step with larger context window (${error.currentContext} -> ${nextContextLength})`,
+            );
+
+            const restartedRuntime = await this.embeddedRuntimeService.ensureStarted(installedModel);
+            if (!restartedRuntime.success) {
+              throw new Error(restartedRuntime.error ?? 'Embedded runtime is not ready after resizing context window');
+            }
+          }
+        }
 
         const choice = response.choices?.[0];
         const reply = choice?.message;
         const content = typeof reply?.content === 'string' ? reply.content : '';
-        if (content) {
+        if (content && !receivedStepText) {
           assistantText += content;
           this.emitRunEvent({
             type: 'token',
@@ -495,7 +541,7 @@ export class AssistantRuntimeService {
           messages.push({
             role: 'tool',
             tool_call_id: toolCall.id,
-            content: this.stringifyForModelContext(toolResult, 6000),
+            content: this.stringifyForModelContext(toolResult, this.getCurrentToolResultLimit()),
           });
         }
 
@@ -928,7 +974,7 @@ export class AssistantRuntimeService {
           if (this.isStandardToolPart(part)) {
             const toolName = part.type.replace(/^tool-/, '');
             if (part.state === 'output-available') {
-              textParts.push(`[Tool Result] ${toolName} ${this.stringifyForModelContext(part.output, 2000)}`);
+              textParts.push(`[Tool Result] ${toolName} ${this.stringifyForModelContext(part.output, this.getHistoryToolResultLimit())}`);
               continue;
             }
             if (part.state === 'output-error') {
@@ -968,7 +1014,7 @@ export class AssistantRuntimeService {
           if (this.isStandardToolPart(part)) {
             const toolName = part.type.replace(/^tool-/, '');
             if (part.state === 'output-available') {
-              return `[Tool Result] ${toolName} ${this.stringifyForModelContext(part.output, 2000)}`;
+              return `[Tool Result] ${toolName} ${this.stringifyForModelContext(part.output, this.getHistoryToolResultLimit())}`;
             }
             if (part.state === 'output-error') {
               return `[Tool Result] ${toolName} ${part.errorText ?? 'error'}`;
@@ -1072,6 +1118,34 @@ export class AssistantRuntimeService {
     }
 
     return `${text.slice(0, maxChars)}...(truncated)`;
+  }
+
+  private getCurrentToolResultLimit(): number {
+    return this.normalizeToolResultLimit(
+      getSetting<number>(STORE_KEYS.ASSISTANT_TOOL_RESULT_LIMIT_CURRENT),
+      ASSISTANT_TOOL_RESULT_LIMITS.CURRENT_DEFAULT,
+    );
+  }
+
+  private getHistoryToolResultLimit(): number {
+    return this.normalizeToolResultLimit(
+      getSetting<number>(STORE_KEYS.ASSISTANT_TOOL_RESULT_LIMIT_HISTORY),
+      ASSISTANT_TOOL_RESULT_LIMITS.HISTORY_DEFAULT,
+    );
+  }
+
+  private normalizeToolResultLimit(value: unknown, fallback: number): number {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(numeric)) {
+      return fallback;
+    }
+
+    const rounded = Math.round(numeric);
+    return ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.includes(
+      rounded as typeof ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS[number],
+    )
+      ? rounded
+      : fallback;
   }
 
   private toToolPartType(toolName: string): `tool-${string}` {

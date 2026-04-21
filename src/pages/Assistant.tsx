@@ -553,8 +553,8 @@ export function AssistantPage() {
   const runtimeIssueMessage = isRuntimeUnavailable
     ? (runtimeStatus?.error ?? 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.')
     : null
-  const isComposerDisabled = !activeThreadId || !!runId || isSending || appState === 'needs-model' || isModelDownloading || isRuntimeUnavailable
-  const isSendDisabled = isComposerDisabled
+  const isComposerDisabled = !activeThreadId || appState === 'needs-model' || isModelDownloading || isRuntimeUnavailable
+  const isSendDisabled = isComposerDisabled || !!runId || isSending
 
   const activeModelLabel = activeThread?.activeModel ?? runtimeStatus?.activeModel ?? runtimeStatus?.recommendedModel.id ?? 'gemma4:e4b'
   const installedModels = runtimeStatus?.installedModels ?? []

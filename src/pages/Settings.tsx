@@ -5,10 +5,12 @@ import { McpMultiClientConfig } from '@/components/mcp'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import { Slider } from '@/components/ui/slider'
 import { useToast } from '@/hooks/use-toast'
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { SseMigrationDialog } from '@/components/SseMigrationDialog'
 import type { AssistantRuntimeStatus } from '@/shared/types'
+import { ASSISTANT_CONTEXT_LENGTH, ASSISTANT_TOOL_RESULT_LIMITS, STORE_KEYS } from '@/shared/constants'
 
 interface SettingsPageProps {
   onNavigateToSettings?: () => void
@@ -47,6 +49,33 @@ function filePathOf(file: File | null): string | null {
   return typeof pathValue === 'string' && pathValue.trim().length > 0 ? pathValue : null
 }
 
+function normalizeContextLength(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) {
+    return ASSISTANT_CONTEXT_LENGTH.DEFAULT
+  }
+  const rounded = Math.round(numeric)
+  return ASSISTANT_CONTEXT_LENGTH.OPTIONS.includes(rounded as typeof ASSISTANT_CONTEXT_LENGTH.OPTIONS[number])
+    ? rounded
+    : ASSISTANT_CONTEXT_LENGTH.DEFAULT
+}
+
+function formatContextLength(value: number): string {
+  return `${Math.round(value / 1024)}k`
+}
+
+function normalizeToolResultLimit(value: unknown, fallback: number): number {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) {
+    return fallback
+  }
+
+  const rounded = Math.round(numeric)
+  return ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.includes(rounded as typeof ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS[number])
+    ? rounded
+    : fallback
+}
+
 export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
   const { toast } = useToast()
   const [stdioPath, setStdioPath] = useState<string>('Loading...')
@@ -57,6 +86,9 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
   const [ggufFile, setGgufFile] = useState<File | null>(null)
   const [mmprojFile, setMmprojFile] = useState<File | null>(null)
   const [isWorking, setIsWorking] = useState(false)
+  const [contextLength, setContextLength] = useState<number>(ASSISTANT_CONTEXT_LENGTH.DEFAULT)
+  const [toolResultLimitCurrent, setToolResultLimitCurrent] = useState<number>(ASSISTANT_TOOL_RESULT_LIMITS.CURRENT_DEFAULT)
+  const [toolResultLimitHistory, setToolResultLimitHistory] = useState<number>(ASSISTANT_TOOL_RESULT_LIMITS.HISTORY_DEFAULT)
 
   const ggufInputRef = useRef<HTMLInputElement | null>(null)
   const mmprojInputRef = useRef<HTMLInputElement | null>(null)
@@ -94,6 +126,15 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
     }
 
     void refreshModelStatus()
+    void window.electron.settings.get<number>(STORE_KEYS.ASSISTANT_CONTEXT_LENGTH).then((value) => {
+      setContextLength(normalizeContextLength(value))
+    })
+    void window.electron.settings.get<number>(STORE_KEYS.ASSISTANT_TOOL_RESULT_LIMIT_CURRENT).then((value) => {
+      setToolResultLimitCurrent(normalizeToolResultLimit(value, ASSISTANT_TOOL_RESULT_LIMITS.CURRENT_DEFAULT))
+    })
+    void window.electron.settings.get<number>(STORE_KEYS.ASSISTANT_TOOL_RESULT_LIMIT_HISTORY).then((value) => {
+      setToolResultLimitHistory(normalizeToolResultLimit(value, ASSISTANT_TOOL_RESULT_LIMITS.HISTORY_DEFAULT))
+    })
     const unsubscribeAssistantStatus = window.electron.assistant.onRuntimeStatusChanged((status) => {
       setRuntimeStatus(status)
     })
@@ -227,6 +268,44 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
 
   const handleSelectMmproj = (event: ChangeEvent<HTMLInputElement>) => {
     setMmprojFile(event.target.files?.[0] ?? null)
+  }
+
+  const contextLengthIndex = Math.max(
+    0,
+    ASSISTANT_CONTEXT_LENGTH.OPTIONS.findIndex((value) => value === contextLength),
+  )
+  const toolResultLimitCurrentIndex = Math.max(
+    0,
+    ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.findIndex((value) => value === toolResultLimitCurrent),
+  )
+  const toolResultLimitHistoryIndex = Math.max(
+    0,
+    ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.findIndex((value) => value === toolResultLimitHistory),
+  )
+
+  const handleContextLengthChange = (values: number[]) => {
+    const nextIndex = Math.max(0, Math.min(ASSISTANT_CONTEXT_LENGTH.OPTIONS.length - 1, Math.round(values[0] ?? 0)))
+    const nextContextLength = ASSISTANT_CONTEXT_LENGTH.OPTIONS[nextIndex] ?? ASSISTANT_CONTEXT_LENGTH.DEFAULT
+    setContextLength(nextContextLength)
+    void window.electron.settings.set(STORE_KEYS.ASSISTANT_CONTEXT_LENGTH, nextContextLength)
+  }
+
+  const handleToolResultLimitCurrentChange = (values: number[]) => {
+    const nextIndex = Math.max(0, Math.min(ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.length - 1, Math.round(values[0] ?? 0)))
+    const nextValue = ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS[nextIndex] ?? ASSISTANT_TOOL_RESULT_LIMITS.CURRENT_DEFAULT
+    setToolResultLimitCurrent(nextValue)
+    void window.electron.settings.set(STORE_KEYS.ASSISTANT_TOOL_RESULT_LIMIT_CURRENT, nextValue)
+  }
+
+  const handleToolResultLimitHistoryChange = (values: number[]) => {
+    const nextIndex = Math.max(0, Math.min(ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.length - 1, Math.round(values[0] ?? 0)))
+    const nextValue = ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS[nextIndex] ?? ASSISTANT_TOOL_RESULT_LIMITS.HISTORY_DEFAULT
+    setToolResultLimitHistory(nextValue)
+    void window.electron.settings.set(STORE_KEYS.ASSISTANT_TOOL_RESULT_LIMIT_HISTORY, nextValue)
+  }
+
+  const formatToolResultLimit = (value: number) => {
+    return formatContextLength(value)
   }
 
   return (
@@ -363,6 +442,88 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
                 )
               })
             )}
+          </div>
+
+          <div className="rounded-lg border p-4 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-medium">Context length</p>
+                <p className="text-muted-foreground text-xs">
+                  Larger values improve memory, but increase RAM usage and may slow generation on some models.
+                </p>
+              </div>
+              <div className="rounded-md border bg-muted/40 px-2 py-1 text-sm font-medium tabular-nums">
+                {formatContextLength(contextLength)}
+              </div>
+            </div>
+            <Slider
+              min={0}
+              max={ASSISTANT_CONTEXT_LENGTH.OPTIONS.length - 1}
+              step={1}
+              value={[contextLengthIndex]}
+              onValueChange={handleContextLengthChange}
+            />
+            <div className="text-muted-foreground grid grid-cols-7 text-center text-xs font-medium tabular-nums">
+              {ASSISTANT_CONTEXT_LENGTH.OPTIONS.map((value) => (
+                <span key={value}>{formatContextLength(value)}</span>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium">Tool response context</p>
+                  <p className="text-muted-foreground text-xs">
+                    Latest tool result characters passed into the next model step.
+                  </p>
+                </div>
+                <div className="rounded-md border bg-muted/40 px-2 py-1 text-sm font-medium tabular-nums">
+                  {formatToolResultLimit(toolResultLimitCurrent)}
+                </div>
+              </div>
+              <Slider
+                min={0}
+                max={ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.length - 1}
+                step={1}
+                value={[toolResultLimitCurrentIndex]}
+                onValueChange={handleToolResultLimitCurrentChange}
+              />
+              <div className="text-muted-foreground grid grid-cols-7 text-center text-xs font-medium tabular-nums">
+                {ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.map((value) => (
+                  <span key={`current-${value}`}>{formatToolResultLimit(value)}</span>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium">Tool history context</p>
+                  <p className="text-muted-foreground text-xs">
+                    Older tool result characters rebuilt into later prompts.
+                  </p>
+                </div>
+                <div className="rounded-md border bg-muted/40 px-2 py-1 text-sm font-medium tabular-nums">
+                  {formatToolResultLimit(toolResultLimitHistory)}
+                </div>
+              </div>
+              <Slider
+                min={0}
+                max={ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.length - 1}
+                step={1}
+                value={[toolResultLimitHistoryIndex]}
+                onValueChange={handleToolResultLimitHistoryChange}
+              />
+              <div className="text-muted-foreground grid grid-cols-7 text-center text-xs font-medium tabular-nums">
+                {ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.map((value) => (
+                  <span key={`history-${value}`}>{formatToolResultLimit(value)}</span>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+              Changes apply on the next assistant request. If the local runtime is already running, it will restart with the new context length automatically.
+            </div>
           </div>
         </CardContent>
       </Card>
