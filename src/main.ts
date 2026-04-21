@@ -4,9 +4,10 @@
  * Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
  */
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, net, protocol } from 'electron';
 import path from 'node:path';
 import inspector from 'node:inspector';
+import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
 import { initialize } from '@aptabase/electron/main';
 import { registerIpcHandlers, setAuthManager, emitToRenderer } from './main/ipc-handlers';
@@ -26,6 +27,19 @@ import { SseDetectionServer } from './main/server/SseDetectionServer';
 // Declare Vite plugin globals
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
+
+const RENDERER_PROTOCOL = 'talktofigma-renderer';
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: RENDERER_PROTOCOL,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+    },
+  },
+]);
 
 // Initialize Aptabase before app is ready (must be before any app events)
 initialize(APTABASE_APP_KEY);
@@ -65,6 +79,44 @@ let mainWindow: BrowserWindow | null = null;
 let tray: TalkToFigmaTray | null = null;
 let serverManager: TalkToFigmaServerManager | null = null;
 let service: TalkToFigmaService | null = null;
+let rendererProtocolRegistered = false;
+
+const getRendererRoot = () => path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
+
+const getPackagedRendererUrl = () => `${RENDERER_PROTOCOL}://renderer/index.html`;
+
+const registerRendererProtocol = () => {
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL || rendererProtocolRegistered) {
+    return;
+  }
+
+  const rendererRoot = getRendererRoot();
+
+  protocol.handle(RENDERER_PROTOCOL, (request) => {
+    const requestUrl = new URL(request.url);
+    const requestedPath = decodeURIComponent(requestUrl.pathname);
+    const relativePath = requestedPath === '/' || requestedPath === ''
+      ? 'index.html'
+      : requestedPath.replace(/^\/+/, '');
+    const filePath = path.join(rendererRoot, relativePath);
+    const relativeToRoot = path.relative(rendererRoot, filePath);
+
+    if (relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) {
+      return new Response('Not found', { status: 404 });
+    }
+
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
+
+  rendererProtocolRegistered = true;
+  logger.info(`Renderer protocol registered for: ${rendererRoot}`);
+};
+
+const loadRenderer = (window: BrowserWindow) => {
+  const rendererUrl = MAIN_WINDOW_VITE_DEV_SERVER_URL || getPackagedRendererUrl();
+  logger.info(`Loading renderer: ${rendererUrl}`);
+  return window.loadURL(rendererUrl);
+};
 
 const createWindow = () => {
   logger.info('Creating main window');
@@ -90,18 +142,22 @@ const createWindow = () => {
   // Center window on screen
   mainWindow.center();
 
-  // Load the app
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-    );
-  }
-
   // Renderer lifecycle diagnostics (critical for packaged/TestFlight blank-screen debugging)
+  let rendererDomReady = false;
+
+  mainWindow.webContents.on('did-start-navigation', (_event, url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) {
+      logger.info(`Renderer did-start-navigation: ${url}`);
+    }
+  });
+
+  mainWindow.webContents.on('dom-ready', () => {
+    rendererDomReady = true;
+    logger.info(`Renderer dom-ready: ${mainWindow?.webContents.getURL() || 'unknown'}`);
+  });
+
   mainWindow.webContents.on('did-finish-load', () => {
-    logger.info('Renderer did-finish-load');
+    logger.info(`Renderer did-finish-load: ${mainWindow?.webContents.getURL() || 'unknown'}`);
   });
 
   mainWindow.webContents.on(
@@ -112,6 +168,11 @@ const createWindow = () => {
       );
     }
   );
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const trimmedMessage = message.length > 500 ? `${message.slice(0, 500)}...` : message;
+    logger.info(`Renderer console[${level}] ${sourceId}:${line} ${trimmedMessage}`);
+  });
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     logger.error(
@@ -132,6 +193,24 @@ const createWindow = () => {
   mainWindow.on('responsive', () => {
     logger.info('Main window responsive again');
   });
+
+  loadRenderer(mainWindow).catch((error) => {
+    logger.error(`Renderer load failed: ${error instanceof Error ? error.message : String(error)}`);
+  });
+
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || rendererDomReady) {
+      return;
+    }
+
+    logger.warn(
+      `Renderer did not reach dom-ready after 10s; currentURL=${mainWindow.webContents.getURL() || 'empty'}, loading=${mainWindow.webContents.isLoading()}. Retrying renderer load.`
+    );
+    mainWindow.webContents.stop();
+    loadRenderer(mainWindow).catch((error) => {
+      logger.error(`Renderer retry failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }, 10_000);
 
   // Register IPC handlers
   registerIpcHandlers(mainWindow);
@@ -304,6 +383,8 @@ const initializeServers = (window: BrowserWindow) => {
 // App ready
 app.on('ready', async () => {
   logger.info('App ready, initializing...');
+
+  registerRendererProtocol();
 
   // Track app start and user engagement (Kotlin-compatible)
   trackAppStart();
