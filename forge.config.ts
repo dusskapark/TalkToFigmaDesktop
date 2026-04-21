@@ -19,6 +19,8 @@ dotenv.config();
 // Check if building for Mac App Store
 const isMAS = process.env.PLATFORM === 'mas';
 const windowsExecutableName = 'talktofigma-desktop';
+const shouldSkipExplicitSigning = (filePath: string) =>
+  /\/Resources\/[^/]+\.lproj\/locale\.pak$/.test(filePath.replace(/\\/g, '/'));
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -42,7 +44,7 @@ const config: ForgeConfig = {
       hardenedRuntime: false, // MAS doesn't use hardened runtime
       timestamp: 'none', // Disable TSA calls explicitly for @electron/osx-sign
       // Skip locale resource payloads from explicit signing to reduce signing overhead
-      ignore: (filePath: string) => /\/Resources\/[^/]+\.lproj\/locale\.pak$/.test(filePath.replace(/\\/g, '/')),
+      ignore: shouldSkipExplicitSigning,
       entitlements: 'entitlements.mas.plist',
       // Child helpers (Renderer/GPU/Plugin) must inherit sandbox from parent.
       // Using parent entitlements here can crash helper startup in libsecinit.
@@ -65,6 +67,8 @@ const config: ForgeConfig = {
       identity: process.env.SIGNING_IDENTITY || 'Developer ID Application: GRABTAXI HOLDINGS PTE. LTD. (VU3G7T53K5)',
       hardenedRuntime: true,
       'gatekeeper-assess': false,
+      // Skip locale resource payloads from explicit signing to reduce signing overhead
+      ignore: shouldSkipExplicitSigning,
       entitlements: 'entitlements.plist',
       'entitlements-inherit': 'entitlements.plist',
     }) as any,
