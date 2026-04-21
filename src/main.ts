@@ -23,6 +23,7 @@ import { installStdioServer } from './main/utils/stdio-installer';
 import { initializeUpdater } from './main/utils/updater';
 import { createMenu } from './main/menu';
 import { SseDetectionServer } from './main/server/SseDetectionServer';
+import { AssistantRuntimeService } from './main/assistant';
 
 // Declare Vite plugin globals
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
@@ -461,6 +462,13 @@ app.on('before-quit', async () => {
 
   // Track app quit
   trackAppQuit();
+
+  // Stop assistant runtime before shutting down app services so spawned llama-server exits.
+  try {
+    await AssistantRuntimeService.shutdownIfInitialized();
+  } catch (error) {
+    logger.error('Error shutting down assistant runtime:', { error });
+  }
 
   // Stop servers gracefully
   try {

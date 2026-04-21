@@ -133,8 +133,31 @@ export class AssistantRuntimeService {
     return AssistantRuntimeService.instance;
   }
 
+  static async shutdownIfInitialized(): Promise<void> {
+    await AssistantRuntimeService.instance?.shutdown();
+  }
+
   setEventHandlers(handlers: AssistantEventHandlers): void {
     this.handlers = handlers;
+  }
+
+  async shutdown(): Promise<void> {
+    this.logger.info('Shutting down assistant runtime');
+
+    for (const controller of this.activeRuns.values()) {
+      controller.abort();
+    }
+
+    for (const runId of Array.from(this.pendingApprovals.keys())) {
+      this.resolvePendingApprovals(runId, false);
+    }
+
+    this.activeRuns.clear();
+    this.pendingApprovals.clear();
+    this.runDedupKeys.clear();
+    this.runToolCallLogs.clear();
+
+    await this.embeddedRuntimeService.stop();
   }
 
   async listModels(): Promise<string[]> {
