@@ -529,7 +529,7 @@ export class EmbeddedLlamaRuntimeService {
       applyChunk(parsed);
     };
 
-    while (true) {
+    for (;;) {
       const { value, done } = await reader.read();
       buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, '\n');
 

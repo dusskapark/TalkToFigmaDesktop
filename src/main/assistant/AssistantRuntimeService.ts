@@ -441,7 +441,7 @@ export class AssistantRuntimeService {
         let receivedStepText = false;
         let response;
         const attemptedContextLengths = new Set<number>();
-        while (true) {
+        for (;;) {
           try {
             response = await this.embeddedRuntimeService.chatCompletions(
               {
