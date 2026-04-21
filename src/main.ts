@@ -4,10 +4,10 @@
  * Use of this source code is governed by an MIT-style license that can be found in the LICENSE file
  */
 
-import { app, BrowserWindow, net, protocol } from 'electron';
+import { app, BrowserWindow, protocol } from 'electron';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import inspector from 'node:inspector';
-import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
 import { initialize } from '@aptabase/electron/main';
 import { registerIpcHandlers, setAuthManager, emitToRenderer } from './main/ipc-handlers';
@@ -86,6 +86,38 @@ const getRendererRoot = () => path.join(__dirname, `../renderer/${MAIN_WINDOW_VI
 
 const getPackagedRendererUrl = () => `${RENDERER_PROTOCOL}://renderer/index.html`;
 
+const getContentType = (filePath: string) => {
+  const extension = path.extname(filePath).toLowerCase();
+
+  switch (extension) {
+    case '.html':
+      return 'text/html; charset=utf-8';
+    case '.js':
+      return 'text/javascript; charset=utf-8';
+    case '.css':
+      return 'text/css; charset=utf-8';
+    case '.json':
+      return 'application/json; charset=utf-8';
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.ico':
+      return 'image/x-icon';
+    case '.icns':
+      return 'image/icns';
+    case '.woff':
+      return 'font/woff';
+    case '.woff2':
+      return 'font/woff2';
+    default:
+      return 'application/octet-stream';
+  }
+};
+
 const registerRendererProtocol = () => {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL || rendererProtocolRegistered) {
     return;
@@ -93,7 +125,7 @@ const registerRendererProtocol = () => {
 
   const rendererRoot = getRendererRoot();
 
-  protocol.handle(RENDERER_PROTOCOL, (request) => {
+  protocol.handle(RENDERER_PROTOCOL, async (request) => {
     const requestUrl = new URL(request.url);
     const requestedPath = decodeURIComponent(requestUrl.pathname);
     const relativePath = requestedPath === '/' || requestedPath === ''
@@ -106,7 +138,17 @@ const registerRendererProtocol = () => {
       return new Response('Not found', { status: 404 });
     }
 
-    return net.fetch(pathToFileURL(filePath).toString());
+    try {
+      const file = await fs.readFile(filePath);
+      return new Response(file, {
+        headers: {
+          'content-type': getContentType(filePath),
+        },
+      });
+    } catch (error) {
+      logger.error(`Renderer asset not found: ${filePath}`, error);
+      return new Response('Not found', { status: 404 });
+    }
   });
 
   rendererProtocolRegistered = true;
