@@ -8,16 +8,16 @@ import { app } from 'electron';
 import { existsSync } from 'node:fs';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createLogger } from '../utils/logger';
-import { getSetting, setSetting } from '../utils/store';
 import { getProcessOnPort, isPortAvailable } from '../utils/port-manager';
 import type { AssistantInstalledModel, AssistantRuntimeHealth } from '../../shared/types';
-import { ASSISTANT_CONTEXT_LENGTH, STORE_KEYS } from '../../shared/constants';
 import {
   type RuntimeBinarySource,
   buildBundledRuntimeCandidates,
   getRuntimeBinaryFileName,
   resolveRuntimePlatformKey,
 } from './runtimeBinary';
+import { AssistantRuntimeSettings } from './AssistantRuntimeSettings';
+import { ExceedContextSizeError } from './AssistantErrors';
 
 interface EnsureStartedResult {
   success: boolean;
@@ -79,18 +79,6 @@ interface LlamaServerErrorPayload {
   };
 }
 
-export class ExceedContextSizeError extends Error {
-  readonly promptTokens: number;
-  readonly currentContext: number;
-
-  constructor(message: string, promptTokens: number, currentContext: number) {
-    super(message);
-    this.name = 'ExceedContextSizeError';
-    this.promptTokens = promptTokens;
-    this.currentContext = currentContext;
-  }
-}
-
 const DEFAULT_RUNTIME_PORT = 11435;
 const MAX_RUNTIME_PORT = 11455;
 const RUNTIME_READY_TIMEOUT_MS = 40_000;
@@ -107,6 +95,7 @@ interface RuntimeBinaryStatus {
 export class EmbeddedLlamaRuntimeService {
   private readonly logger = createLogger('EmbeddedLlamaRuntimeService');
   private readonly onStateChanged?: () => void;
+  private readonly runtimeSettings: AssistantRuntimeSettings;
 
   private process: ChildProcessWithoutNullStreams | null = null;
   private health: AssistantRuntimeHealth = 'starting';
@@ -116,7 +105,8 @@ export class EmbeddedLlamaRuntimeService {
   private activePort = DEFAULT_RUNTIME_PORT;
   private runtimeModelName = 'local-model';
 
-  constructor(options?: { onStateChanged?: () => void }) {
+  constructor(options?: { runtimeSettings?: AssistantRuntimeSettings; onStateChanged?: () => void }) {
+    this.runtimeSettings = options?.runtimeSettings ?? new AssistantRuntimeSettings();
     this.onStateChanged = options?.onStateChanged;
   }
 
@@ -349,36 +339,17 @@ export class EmbeddedLlamaRuntimeService {
   }
 
   private getConfiguredContextLength(): number {
-    const value = getSetting<number>(STORE_KEYS.ASSISTANT_CONTEXT_LENGTH);
-    return this.normalizeContextLength(value);
+    return this.runtimeSettings.getContextLength();
   }
 
   increaseContextLengthForPrompt(promptTokens: number, currentContext: number): number | null {
-    const configured = this.getConfiguredContextLength();
-    const requiredWithHeadroom = Math.max(promptTokens + 2_048, configured);
-    const nextContextLength = ASSISTANT_CONTEXT_LENGTH.OPTIONS.find((option) => option >= requiredWithHeadroom) ?? null;
-
-    if (!nextContextLength || nextContextLength <= currentContext) {
-      return null;
+    const nextContextLength = this.runtimeSettings.increaseContextLengthForPrompt(promptTokens, currentContext);
+    if (nextContextLength) {
+      this.logger.warn(
+        `Increasing assistant context length from ${currentContext} to ${nextContextLength} after exceed_context_size_error (${promptTokens} prompt tokens)`,
+      );
     }
-
-    setSetting(STORE_KEYS.ASSISTANT_CONTEXT_LENGTH, nextContextLength);
-    this.logger.warn(
-      `Increasing assistant context length from ${currentContext} to ${nextContextLength} after exceed_context_size_error (${promptTokens} prompt tokens)`,
-    );
     return nextContextLength;
-  }
-
-  private normalizeContextLength(value: unknown): number {
-    const numeric = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(numeric)) {
-      return ASSISTANT_CONTEXT_LENGTH.DEFAULT;
-    }
-
-    const rounded = Math.round(numeric);
-    return ASSISTANT_CONTEXT_LENGTH.OPTIONS.includes(rounded as typeof ASSISTANT_CONTEXT_LENGTH.OPTIONS[number])
-      ? rounded
-      : ASSISTANT_CONTEXT_LENGTH.DEFAULT;
   }
 
   private parseLlamaServerError(text: string): LlamaServerErrorPayload | null {

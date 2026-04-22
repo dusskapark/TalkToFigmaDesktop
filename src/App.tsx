@@ -40,6 +40,32 @@ function usePageViewTracking(currentPage: PageId) {
   }, [currentPage])
 }
 
+async function copyTextToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return
+  } catch (error) {
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.setAttribute('readonly', 'true')
+    textArea.style.position = 'fixed'
+    textArea.style.opacity = '0'
+    document.body.appendChild(textArea)
+
+    let copied = false
+    try {
+      textArea.select()
+      copied = document.execCommand('copy')
+    } finally {
+      document.body.removeChild(textArea)
+    }
+
+    if (!copied) {
+      throw error
+    }
+  }
+}
+
 function App() {
   const [currentPage, setCurrentPage] = useState<PageId>('terminal')
   const [serverStatus, setServerStatus] = useState({
@@ -245,7 +271,7 @@ Ready to bridge Figma and AI tools via MCP
     try {
       // Get last 200 lines from logs
       const last200Lines = logs.slice(-200).join('\n')
-      await navigator.clipboard.writeText(last200Lines)
+      await copyTextToClipboard(last200Lines)
       setCopied(true)
       // Reset copied state after 2 seconds
       setTimeout(() => setCopied(false), 2000)
