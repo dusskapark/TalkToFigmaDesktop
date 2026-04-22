@@ -67,7 +67,29 @@ export function createMenu(mainWindow: BrowserWindow) {
             { role: 'hideOthers' },
             { role: 'unhide' },
             { type: 'separator' },
-            { role: 'quit' }
+            {
+              label: `Quit ${app.name}`,
+              accelerator: 'Command+Q',
+              click: () => {
+                app.quit();
+              }
+            }
+          ]
+        } as MenuItemConstructorOptions]
+      : []),
+
+    // File Menu (Windows/Linux)
+    ...(!isMac
+      ? [{
+          label: 'File',
+          submenu: [
+            {
+              label: 'Quit',
+              accelerator: 'CmdOrCtrl+Q',
+              click: () => {
+                app.quit();
+              }
+            }
           ]
         } as MenuItemConstructorOptions]
       : []),

@@ -65,6 +65,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: TalkToFigmaTray | null = null;
 let serverManager: TalkToFigmaServerManager | null = null;
 let service: TalkToFigmaService | null = null;
+let quitFallbackTimer: NodeJS.Timeout | null = null;
 
 const createWindow = () => {
   logger.info('Creating main window');
@@ -371,6 +372,13 @@ app.on('activate', () => {
 app.on('before-quit', async () => {
   logger.info('App shutting down...');
 
+  if (!quitFallbackTimer) {
+    quitFallbackTimer = setTimeout(() => {
+      logger.warn('before-quit cleanup timed out, forcing app exit');
+      app.exit(0);
+    }, 4000);
+  }
+
   // Flush buffered MCP success analytics before app shutdown.
   try {
     flushMCPToolSuccessBatch('app_quit');
@@ -415,6 +423,11 @@ app.on('before-quit', async () => {
 
   // Destroy tray
   tray?.destroy();
+
+  if (quitFallbackTimer) {
+    clearTimeout(quitFallbackTimer);
+    quitFallbackTimer = null;
+  }
 
   logger.info('App shutdown complete');
 });
