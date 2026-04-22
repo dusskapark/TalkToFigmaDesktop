@@ -14,7 +14,7 @@ import { TalkToFigmaService } from './server/TalkToFigmaService';
  * Create application menu
  * Based on Tray menu structure for consistency
  */
-export function createMenu(mainWindow: BrowserWindow) {
+export function createMenu(mainWindow: BrowserWindow, requestQuit: () => void | Promise<void>) {
   const isMac = process.platform === 'darwin';
   const { canCheckForUpdates } = getUpdateCapabilities();
   const serverManager = TalkToFigmaServerManager.getInstance();
@@ -67,8 +67,30 @@ export function createMenu(mainWindow: BrowserWindow) {
             { role: 'hideOthers' },
             { role: 'unhide' },
             { type: 'separator' },
-            { role: 'quit' }
+            {
+              label: `Quit ${app.name}`,
+              accelerator: 'Command+Q',
+              click: () => {
+                void requestQuit();
+              },
+            }
           ]
+        } as MenuItemConstructorOptions]
+      : []),
+
+    // File Menu (Windows/Linux)
+    ...(!isMac
+      ? [{
+          label: 'File',
+          submenu: [
+            {
+              label: 'Quit',
+              accelerator: 'Alt+F4',
+              click: () => {
+                void requestQuit();
+              },
+            },
+          ],
         } as MenuItemConstructorOptions]
       : []),
 

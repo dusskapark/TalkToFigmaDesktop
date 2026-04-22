@@ -37,10 +37,12 @@ export class TalkToFigmaTray {
   private tray: Tray | null = null;
   private manager: TalkToFigmaServerManager;
   private service: TalkToFigmaService;
+  private requestQuit: () => void | Promise<void>;
 
-  constructor(manager: TalkToFigmaServerManager) {
+  constructor(manager: TalkToFigmaServerManager, requestQuit: () => void | Promise<void> = () => app.quit()) {
     this.manager = manager;
     this.service = TalkToFigmaService.getInstance();
+    this.requestQuit = requestQuit;
 
     // Register this tray to be updated when server status changes
     this.service.setTrayUpdateCallback(() => {
@@ -166,9 +168,8 @@ export class TalkToFigmaTray {
       // ═══ EXIT ═══
       {
         label: 'Quit',
-        click: async () => {
-          await this.manager.stopAll();
-          app.quit();
+        click: () => {
+          void this.requestQuit();
         },
       },
     ];

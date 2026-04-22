@@ -63,11 +63,36 @@ let mainWindow: BrowserWindow | null = null;
 let tray: TalkToFigmaTray | null = null;
 let serverManager: TalkToFigmaServerManager | null = null;
 let service: TalkToFigmaService | null = null;
+let quitRequested = false;
+let shutdownComplete = false;
 
 const rendererLoaderOptions = {
   devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
   rendererName: MAIN_WINDOW_VITE_NAME,
   logger,
+};
+
+const requestAppQuit = async () => {
+  if (quitRequested) {
+    logger.info('Quit already requested');
+    return;
+  }
+
+  quitRequested = true;
+  logger.info('Quit requested');
+
+  try {
+    await shutdownApp({
+      logger,
+      service,
+      tray,
+      flushMCPToolSuccessBatch,
+      trackAppQuit,
+    });
+  } finally {
+    shutdownComplete = true;
+    app.exit(0);
+  }
 };
 
 const createWindow = () => {
@@ -77,7 +102,7 @@ const createWindow = () => {
     loadRenderer: (window) => loadRenderer(window, rendererLoaderOptions),
     registerIpcHandlers,
     setLoggerWindow: setMainWindow,
-    createMenu,
+    createMenu: (window) => createMenu(window, requestAppQuit),
   });
 };
 
@@ -89,7 +114,7 @@ const createTray = () => {
     return;
   }
 
-  tray = new TalkToFigmaTray(serverManager);
+  tray = new TalkToFigmaTray(serverManager, requestAppQuit);
   tray.create();
 
   logger.info('System tray created');
@@ -119,7 +144,7 @@ const initializeServers = (window: BrowserWindow) => {
 
   service.setMenuUpdateCallback(() => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      createMenu(mainWindow);
+      createMenu(mainWindow, requestAppQuit);
     }
   });
 
@@ -186,7 +211,7 @@ app.on('ready', async () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     logger.info('All windows closed, quitting app');
-    app.quit();
+    void requestAppQuit();
   }
 });
 
@@ -196,14 +221,13 @@ app.on('activate', () => {
   }
 });
 
-app.on('before-quit', async () => {
-  await shutdownApp({
-    logger,
-    service,
-    tray,
-    flushMCPToolSuccessBatch,
-    trackAppQuit,
-  });
+app.on('before-quit', (event) => {
+  if (shutdownComplete) {
+    return;
+  }
+
+  event.preventDefault();
+  void requestAppQuit();
 });
 
 app.on('will-quit', () => {

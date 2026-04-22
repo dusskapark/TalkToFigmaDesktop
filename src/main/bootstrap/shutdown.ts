@@ -66,7 +66,7 @@ function closeWindows(logger: LoggerLike): void {
         window.webContents.closeDevTools();
       }
       if (!window.isDestroyed()) {
-        window.close();
+        window.destroy();
       }
     } catch (error) {
       logger.error('Error closing window:', { error });
