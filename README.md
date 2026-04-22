@@ -24,7 +24,7 @@
     <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
   </a>
   <a href="https://nodejs.org/">
-    <img src="https://img.shields.io/badge/node-18%2B-green?style=flat-square&logo=node.js" alt="Node.js">
+    <img src="https://img.shields.io/badge/node-22%2B-green?style=flat-square&logo=node.js" alt="Node.js">
   </a>
 </p>
 
@@ -156,7 +156,7 @@ Figma Plugin
 
 ### Prerequisites
 
-- Node.js 18+ ([Download](https://nodejs.org/))
+- Node.js 22+ ([Download](https://nodejs.org/))
 - npm (comes with Node.js)
 - Git
 

@@ -5,12 +5,13 @@ on:
     tags:
       - 'v*'
 
-env:
-  NODE_VERSION: '22'
-
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['22', '24']
     
     steps:
       - name: Checkout code
@@ -19,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
       
       - name: Display Node.js information
@@ -34,6 +35,6 @@ jobs:
       
       - name: Run linter
         run: npm run lint
-      
-      # Note: Electron tests would require a display, so we only run linting here
-      # Add test script when unit tests are available  
+
+      - name: Run assistant tests
+        run: npm run test:assistant -- --test-reporter=spec

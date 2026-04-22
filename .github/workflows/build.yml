@@ -315,7 +315,7 @@ jobs:
             ### 📋 Requirements
             - macOS 10.15 (Catalina) or later
             - Windows 10 or later
-            - Node.js 18+ (for MCP server)
+            - Node.js 22+ (for MCP server)
 
             ### 🚀 What's New
             See commit history and release notes below for details.
