@@ -7,7 +7,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ASSISTANT_CONTEXT_LENGTH, ASSISTANT_TOOL_RESULT_LIMITS, STORE_KEYS } from '../../shared/constants';
-import { AssistantRuntimeSettings, normalizeContextLength, normalizeToolResultLimit } from './AssistantRuntimeSettings';
+import {
+  AssistantRuntimeSettings,
+  normalizeContextLength,
+  normalizeRuntimeBackend,
+  normalizeToolResultLimit,
+} from './AssistantRuntimeSettings';
 
 test('normalizeContextLength accepts only configured context options', () => {
   assert.equal(normalizeContextLength(ASSISTANT_CONTEXT_LENGTH.OPTIONS[0]), ASSISTANT_CONTEXT_LENGTH.OPTIONS[0]);
@@ -19,6 +24,12 @@ test('normalizeToolResultLimit accepts only configured tool result options', () 
   assert.equal(normalizeToolResultLimit(ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS[1], 4096), ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS[1]);
   assert.equal(normalizeToolResultLimit('bad', 4096), 4096);
   assert.equal(normalizeToolResultLimit(12345, 4096), 4096);
+});
+
+test('normalizeRuntimeBackend defaults unknown values to embedded', () => {
+  assert.equal(normalizeRuntimeBackend('ollama'), 'ollama');
+  assert.equal(normalizeRuntimeBackend('embedded'), 'embedded');
+  assert.equal(normalizeRuntimeBackend('bad'), 'embedded');
 });
 
 test('AssistantRuntimeSettings increases context length with headroom', () => {

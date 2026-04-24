@@ -103,6 +103,7 @@ const electronAPI: ElectronAPI = {
     cancelModelDownload: () => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_CANCEL_MODEL_DOWNLOAD),
     uploadModel: (payload) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_UPLOAD_MODEL, payload),
     deleteModel: (modelId: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_DELETE_MODEL, modelId),
+    setRuntimeBackend: (backend) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_SET_RUNTIME_BACKEND, backend),
     setActiveModel: (threadId: string, model: string) =>
       ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_SET_ACTIVE_MODEL, threadId, model),
     createThread: (title?: string) => ipcRenderer.invoke(IPC_CHANNELS.ASSISTANT_CREATE_THREAD, title),

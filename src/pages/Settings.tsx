@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 
 import { useToast } from '@/hooks/use-toast'
 import { SseMigrationDialog } from '@/components/SseMigrationDialog'
-import type { AssistantRuntimeStatus } from '@/shared/types'
+import type { AssistantRuntimeBackend, AssistantRuntimeStatus } from '@/shared/types'
 import { ASSISTANT_CONTEXT_LENGTH, ASSISTANT_TOOL_RESULT_LIMITS, STORE_KEYS } from '@/shared/constants'
 import {
   AssistantRuntimeSettingsSection,
@@ -164,6 +164,32 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
     }
   }
 
+  const handleRuntimeBackendChange = async (backend: AssistantRuntimeBackend) => {
+    setIsWorking(true)
+    try {
+      const result = await window.electron.assistant.setRuntimeBackend(backend)
+      if (!result.success) {
+        toast({
+          variant: 'destructive',
+          title: 'Runtime change failed',
+          description: result.error ?? 'Could not change the Assistant runtime.',
+        })
+        return
+      }
+      await refreshModelStatus()
+    } finally {
+      setIsWorking(false)
+    }
+  }
+
+  const copyPullCommand = (modelId: string) => {
+    navigator.clipboard.writeText(`ollama pull ${modelId}`)
+    toast({
+      title: 'Copied to clipboard',
+      description: 'Ollama pull command has been copied.',
+    })
+  }
+
   const handleDeleteModel = async (modelId: string) => {
     const confirmed = window.confirm(`Delete model ${modelId}?`)
     if (!confirmed) return
@@ -233,6 +259,8 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
         onSelectMmproj={handleSelectMmproj}
         onDownloadRecommendedModel={() => void handleDownloadRecommendedModel()}
         onRefreshModelStatus={() => void refreshModelStatus()}
+        onRuntimeBackendChange={(backend) => void handleRuntimeBackendChange(backend)}
+        onCopyPullCommand={copyPullCommand}
         onUploadModel={() => void handleUploadModel()}
         onActivateModel={(modelId) => void handleActivateModel(modelId)}
         onDeleteModel={(modelId) => void handleDeleteModel(modelId)}

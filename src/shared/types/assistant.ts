@@ -93,6 +93,7 @@ export interface ToolApprovalRequest {
 }
 
 export type AssistantRuntimeHealth = 'starting' | 'ready' | 'error';
+export type AssistantRuntimeBackend = 'embedded' | 'ollama';
 export type AssistantModelDownloadState = 'idle' | 'downloading' | 'verifying' | 'completed' | 'failed';
 
 export interface AssistantModelDownloadProgress {
@@ -125,7 +126,7 @@ export interface AssistantInstalledModel {
   id: string;
   displayName: string;
   version: string;
-  source: 'download' | 'upload';
+  source: 'download' | 'upload' | 'ollama';
   supportsVision: boolean;
   modelPath: string;
   modelSha256: string;
@@ -137,12 +138,14 @@ export interface AssistantInstalledModel {
 }
 
 export interface AssistantRuntimeStatus {
-  backend: 'embedded';
+  backend: AssistantRuntimeBackend;
   health: AssistantRuntimeHealth;
   modelInstalled: boolean;
   runtimeBinaryReady: boolean;
-  runtimeBinarySource: 'bundled' | 'missing';
+  runtimeBinarySource: 'bundled' | 'missing' | 'external';
   runtimeBinaryPath?: string;
+  daemonReachable?: boolean;
+  baseUrl?: string;
   activeModel: string | null;
   installedModels: string[];
   installedModelDetails: AssistantInstalledModel[];

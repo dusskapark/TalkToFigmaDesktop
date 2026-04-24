@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { Check, ChevronDown, Copy, Loader2, Paperclip, Plus, SendHorizontal, Shield, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Copy, Loader2, Paperclip, Plus, RefreshCw, SendHorizontal, Shield, Terminal, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -551,13 +551,24 @@ export function AssistantPage() {
   const isModelDownloading = isModelDownloadInProgress(runtimeStatus?.downloadState)
   const isRuntimeUnavailable = Boolean(runtimeStatus?.modelInstalled && runtimeStatus.runtimeBinaryReady === false)
   const runtimeIssueMessage = isRuntimeUnavailable
-    ? (runtimeStatus?.error ?? 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.')
+    ? (runtimeStatus?.error ?? (runtimeStatus?.backend === 'ollama'
+      ? 'Ollama is not reachable. Start Ollama, then refresh models.'
+      : 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.'))
     : null
   const isComposerDisabled = !activeThreadId || appState === 'needs-model' || isModelDownloading || isRuntimeUnavailable
   const isSendDisabled = isComposerDisabled || !!runId || isSending
 
-  const activeModelLabel = activeThread?.activeModel ?? runtimeStatus?.activeModel ?? runtimeStatus?.recommendedModel.id ?? 'gemma4:e4b'
   const installedModels = runtimeStatus?.installedModels ?? []
+  const activeThreadModel = activeThread?.activeModel && installedModels.includes(activeThread.activeModel)
+    ? activeThread.activeModel
+    : null
+  const activeModelLabel = activeThreadModel
+    ?? runtimeStatus?.activeModel
+    ?? runtimeStatus?.recommendedModel.id
+    ?? 'gemma4:e4b'
+  const runtimeBackendLabel = runtimeStatus?.backend === 'ollama' ? 'Ollama' : 'Embedded'
+  const runtimeBackendDescription = `Choose an available ${runtimeBackendLabel.toLowerCase()} model for this thread.`
+  const activeModelDisplayLabel = `${runtimeBackendLabel} · ${activeModelLabel}`
   const quickSwitchModels = useMemo(() => {
     if (installedModels.length <= MAX_PROMPT_INPUT_MODEL_OPTIONS) {
       return installedModels
@@ -951,8 +962,10 @@ export function AssistantPage() {
       if (!result.success) {
         if (isErrorCode(result.error, 'MODEL_SELECTION_REQUIRED') || isErrorCode(result.error, 'MODEL_NOT_INSTALLED')) {
           openSetupDialog(false)
-        } else if (isErrorCode(result.error, 'RUNTIME_BINARY_MISSING')) {
-          setError(runtimeIssueMessage ?? 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.')
+        } else if (isErrorCode(result.error, 'RUNTIME_BINARY_MISSING') || isErrorCode(result.error, 'OLLAMA_UNAVAILABLE')) {
+          setError(runtimeIssueMessage ?? (runtimeStatus?.backend === 'ollama'
+            ? 'Ollama is not reachable. Start Ollama, then refresh models.'
+            : 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.'))
         } else {
           setError(result.error ?? 'Failed to send message')
         }
@@ -1361,7 +1374,7 @@ export function AssistantPage() {
                           className="h-8 gap-1 rounded-full px-3 font-mono text-[11px]"
                           disabled={isComposerDisabled || isChangingModel}
                         >
-                          {activeModelLabel}
+                          <span className="max-w-[44vw] truncate sm:max-w-[220px]">{activeModelDisplayLabel}</span>
                           <ChevronDown className="size-3.5" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -1439,7 +1452,7 @@ export function AssistantPage() {
           <SheetHeader className="pb-2">
             <SheetTitle>Assistant Threads</SheetTitle>
             <SheetDescription>
-              {threads.length} thread{threads.length === 1 ? '' : 's'} · Local runtime ({runtimeStatus?.defaultModel ?? 'gemma4:e4b'})
+              {threads.length} thread{threads.length === 1 ? '' : 's'} · {runtimeBackendLabel} runtime
             </SheetDescription>
           </SheetHeader>
 
@@ -1466,7 +1479,9 @@ export function AssistantPage() {
                   >
                     <p className="truncate text-sm font-medium">{thread.title}</p>
                     <p className="text-muted-foreground mt-0.5 text-xs">
-                      {thread.activeModel ?? runtimeStatus?.defaultModel ?? 'No model'}
+                      {thread.activeModel && installedModels.includes(thread.activeModel)
+                        ? thread.activeModel
+                        : 'Model unavailable'}
                     </p>
                   </button>
                   <button
@@ -1505,11 +1520,48 @@ export function AssistantPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Model Wizard</DialogTitle>
+            <DialogTitle>{runtimeStatus?.backend === 'ollama' ? 'Ollama Setup' : 'Model Wizard'}</DialogTitle>
             <DialogDescription>
-              Download the recommended model first. Assistant stays locked until installation is completed.
+              {runtimeStatus?.backend === 'ollama'
+                ? 'Start Ollama and pull a model before using Assistant with the Ollama runtime.'
+                : 'Download the recommended model first. Assistant stays locked until installation is completed.'}
             </DialogDescription>
           </DialogHeader>
+          {runtimeStatus?.backend === 'ollama' ? (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-md border p-3">
+                <p className="text-muted-foreground text-xs">Ollama daemon</p>
+                <p className="font-medium">{runtimeStatus?.daemonReachable ? 'Reachable' : 'Not reachable'}</p>
+                <p className="text-muted-foreground mt-1 text-xs">{runtimeStatus?.baseUrl ?? 'http://127.0.0.1:11434'}</p>
+                {runtimeStatus?.error ? (
+                  <p className="text-destructive mt-2 text-xs">{runtimeStatus.error}</p>
+                ) : null}
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="flex items-start gap-2">
+                  <Terminal className="text-muted-foreground mt-0.5 size-4" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">Pull a model</p>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Run this in Terminal, then recheck models.
+                    </p>
+                    <code className="mt-2 block rounded-md bg-muted px-2 py-1 text-xs">
+                      ollama pull gemma4:e4b
+                    </code>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      navigator.clipboard.writeText('ollama pull gemma4:e4b')
+                    }}
+                  >
+                    <Copy className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className="space-y-3 text-sm">
             <div className="rounded-md border p-3">
               <p className="text-muted-foreground text-xs">Recommended model</p>
@@ -1542,10 +1594,16 @@ export function AssistantPage() {
               ) : null}
             </div>
           </div>
+          )}
           <DialogFooter>
             {runtimeStatus?.modelInstalled ? (
               <Button variant="outline" onClick={closeSetupDialog}>
                 Close
+              </Button>
+            ) : runtimeStatus?.backend === 'ollama' ? (
+              <Button variant="outline" onClick={() => void handleRecheckModels()} disabled={isRecheckingModels}>
+                {isRecheckingModels ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                {isRecheckingModels ? 'Checking...' : 'Recheck Models'}
               </Button>
             ) : (
               <Button
@@ -1574,7 +1632,7 @@ export function AssistantPage() {
           <DialogHeader>
             <DialogTitle>Select a model</DialogTitle>
             <DialogDescription>
-              Choose an installed model for this thread. You can upload GGUF(+mmproj) models in Settings &gt; Model.
+              {runtimeBackendDescription}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -1593,7 +1651,9 @@ export function AssistantPage() {
             ) : null}
             {installedModels.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                No model is installed. Use Model Wizard first, then return.
+                {runtimeStatus?.backend === 'ollama'
+                  ? 'No Ollama models found. Pull a model in Terminal, then recheck.'
+                  : 'No model is installed. Use Model Wizard first, then return.'}
               </p>
             ) : null}
           </div>

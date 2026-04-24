@@ -7,6 +7,7 @@ import type {
   AssistantMessage,
   AssistantModelCatalogItem,
   AssistantModelUploadRequest,
+  AssistantRuntimeBackend,
   AssistantRunEvent,
   AssistantRuntimeStatus,
   AssistantThread,
@@ -84,6 +85,7 @@ export interface RendererToMainInvocations {
     payload: AssistantModelUploadRequest,
   ) => Promise<{ success: boolean; modelId?: string; error?: string }>;
   'assistant:delete-model': (modelId: string) => Promise<{ success: boolean; error?: string }>;
+  'assistant:set-runtime-backend': (backend: AssistantRuntimeBackend) => Promise<{ success: boolean; error?: string }>;
   'assistant:set-active-model': (threadId: string, model: string) => Promise<{ success: boolean; error?: string }>;
   'assistant:create-thread': (title?: string) => Promise<AssistantThread>;
   'assistant:list-threads': () => Promise<AssistantThread[]>;
@@ -186,6 +188,7 @@ export interface ElectronAPI {
       payload: AssistantModelUploadRequest,
     ) => Promise<{ success: boolean; modelId?: string; error?: string }>;
     deleteModel: (modelId: string) => Promise<{ success: boolean; error?: string }>;
+    setRuntimeBackend: (backend: AssistantRuntimeBackend) => Promise<{ success: boolean; error?: string }>;
     setActiveModel: (threadId: string, model: string) => Promise<{ success: boolean; error?: string }>;
     createThread: (title?: string) => Promise<AssistantThread>;
     listThreads: () => Promise<AssistantThread[]>;

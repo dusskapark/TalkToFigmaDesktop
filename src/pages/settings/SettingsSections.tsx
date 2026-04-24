@@ -1,5 +1,5 @@
 import type { ChangeEvent, RefObject } from 'react'
-import { Link2, Copy, AlertTriangle, Cpu, Download, Loader2, Trash2, Upload } from 'lucide-react'
+import { Link2, Copy, AlertTriangle, Cpu, Download, Loader2, RefreshCw, Terminal, Trash2, Upload } from 'lucide-react'
 import { Figma, MCP } from '@lobehub/icons'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
-import type { AssistantRuntimeStatus } from '@/shared/types'
+import type { AssistantRuntimeBackend, AssistantRuntimeStatus } from '@/shared/types'
 import { ASSISTANT_CONTEXT_LENGTH, ASSISTANT_TOOL_RESULT_LIMITS } from '@/shared/constants'
 import { formatBytes, formatContextLength, formatEta } from './utils'
 
@@ -25,6 +25,8 @@ interface ModelSettingsSectionProps {
   onSelectMmproj: (event: ChangeEvent<HTMLInputElement>) => void
   onDownloadRecommendedModel: () => void
   onRefreshModelStatus: () => void
+  onRuntimeBackendChange: (backend: AssistantRuntimeBackend) => void
+  onCopyPullCommand: (modelId: string) => void
   onUploadModel: () => void
   onActivateModel: (modelId: string) => void
   onDeleteModel: (modelId: string) => void
@@ -43,6 +45,8 @@ export function ModelSettingsSection({
   onSelectMmproj,
   onDownloadRecommendedModel,
   onRefreshModelStatus,
+  onRuntimeBackendChange,
+  onCopyPullCommand,
   onUploadModel,
   onActivateModel,
   onDeleteModel,
@@ -57,6 +61,16 @@ export function ModelSettingsSection({
   const runtimeBinaryReady = runtimeStatus?.runtimeBinaryReady ?? false
   const runtimeBinaryPath = runtimeStatus?.runtimeBinaryPath ?? null
   const sortedInstalledModels = [...(runtimeStatus?.installedModelDetails ?? [])].sort((a, b) => b.installedAt - a.installedAt)
+  const backend = runtimeStatus?.backend ?? 'embedded'
+  const isOllama = backend === 'ollama'
+  const ollamaPullModel = sortedInstalledModels[0]?.id ?? recommendedModel?.id ?? 'gemma4:e4b'
+  const runtimeStatusLabel = isOllama
+    ? runtimeStatus?.daemonReachable
+      ? runtimeStatus.modelInstalled ? 'Ready' : 'No models'
+      : 'Daemon offline'
+    : runtimeBinaryReady
+      ? 'Ready'
+      : 'Missing runtime'
 
   return (
     <Card>
@@ -66,10 +80,90 @@ export function ModelSettingsSection({
           Model
         </CardTitle>
         <CardDescription>
-          First-run download and manual GGUF(+mmproj) upload for the local Assistant runtime.
+          Choose how Assistant runs local models, then select the active model for new requests.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            className={`rounded-lg border p-3 text-left transition-colors ${
+              backend === 'embedded' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+            }`}
+            onClick={() => onRuntimeBackendChange('embedded')}
+            disabled={isWorking}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-medium">Embedded</p>
+              <span className="rounded-md border bg-background px-2 py-0.5 text-[11px]">
+                {backend === 'embedded' ? runtimeStatusLabel : 'Bundled'}
+              </span>
+            </div>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Bundled llama-server with downloaded or uploaded GGUF models.
+            </p>
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg border p-3 text-left transition-colors ${
+              backend === 'ollama' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+            }`}
+            onClick={() => onRuntimeBackendChange('ollama')}
+            disabled={isWorking}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-medium">Ollama</p>
+              <span className="rounded-md border bg-background px-2 py-0.5 text-[11px]">
+                {backend === 'ollama' ? runtimeStatusLabel : 'External'}
+              </span>
+            </div>
+            <p className="text-muted-foreground mt-1 text-xs">
+              Connect to the local Ollama daemon and use models pulled by Ollama.
+            </p>
+          </button>
+        </div>
+
+        {isOllama ? (
+          <div className="rounded-lg border p-3 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium">Ollama daemon</p>
+                <p className="text-muted-foreground text-xs">
+                  {runtimeStatus?.baseUrl ?? 'http://127.0.0.1:11434'}
+                </p>
+              </div>
+              <Button variant="outline" onClick={onRefreshModelStatus} disabled={isWorking}>
+                <RefreshCw className="size-4" />
+                Refresh
+              </Button>
+            </div>
+
+            {runtimeStatus?.error ? (
+              <p className="text-destructive text-xs">{runtimeStatus.error}</p>
+            ) : null}
+
+            {sortedInstalledModels.length === 0 ? (
+              <div className="rounded-md border bg-muted/20 p-3">
+                <div className="flex items-start gap-2">
+                  <Terminal className="text-muted-foreground mt-0.5 size-4" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">Pull a model with Ollama</p>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Install or start Ollama, then run this command and refresh.
+                    </p>
+                    <code className="mt-2 block rounded-md bg-background px-2 py-1 text-xs">
+                      ollama pull {ollamaPullModel}
+                    </code>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => onCopyPullCommand(ollamaPullModel)}>
+                    <Copy className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <>
         <div className="rounded-lg border p-3 space-y-2">
           <p className="font-medium">Recommended model</p>
           <p className="text-sm">{recommendedModel?.displayName ?? 'gemma4:e4b'}</p>
@@ -143,11 +237,15 @@ export function ModelSettingsSection({
             Upload Model
           </Button>
         </div>
+          </>
+        )}
 
         <div className="rounded-lg border p-3 space-y-2">
-          <p className="font-medium">Installed models</p>
+          <p className="font-medium">{isOllama ? 'Ollama models' : 'Installed models'}</p>
           {sortedInstalledModels.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No installed models yet.</p>
+            <p className="text-muted-foreground text-sm">
+              {isOllama ? 'No Ollama models found.' : 'No installed models yet.'}
+            </p>
           ) : (
             sortedInstalledModels.map((model) => {
               const isActive = runtimeStatus?.activeModel === model.id
@@ -173,8 +271,8 @@ export function ModelSettingsSection({
                         size="icon"
                         variant="ghost"
                         onClick={() => onDeleteModel(model.id)}
-                        disabled={isWorking}
-                        aria-label={`Delete ${model.displayName}`}
+                        disabled={isWorking || isOllama}
+                        aria-label={isOllama ? `Manage ${model.displayName} with Ollama` : `Delete ${model.displayName}`}
                       >
                         <Trash2 className="size-4" />
                       </Button>

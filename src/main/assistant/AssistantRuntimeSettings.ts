@@ -5,6 +5,7 @@
  */
 
 import { ASSISTANT_CONTEXT_LENGTH, ASSISTANT_TOOL_RESULT_LIMITS, STORE_KEYS } from '../../shared/constants';
+import type { AssistantRuntimeBackend } from '../../shared/types';
 import { getSetting, setSetting } from '../utils/store';
 
 type GetSetting = <T>(key: string) => T | undefined;
@@ -36,6 +37,10 @@ export function normalizeToolResultLimit(value: unknown, fallback: number): numb
     : fallback;
 }
 
+export function normalizeRuntimeBackend(value: unknown): AssistantRuntimeBackend {
+  return value === 'ollama' ? 'ollama' : 'embedded';
+}
+
 export class AssistantRuntimeSettings {
   constructor(
     private readonly readSetting: GetSetting = defaultGetSetting,
@@ -44,6 +49,14 @@ export class AssistantRuntimeSettings {
 
   getContextLength(): number {
     return normalizeContextLength(this.readSetting<number>(STORE_KEYS.ASSISTANT_CONTEXT_LENGTH));
+  }
+
+  getRuntimeBackend(): AssistantRuntimeBackend {
+    return normalizeRuntimeBackend(this.readSetting<AssistantRuntimeBackend>(STORE_KEYS.ASSISTANT_RUNTIME_BACKEND));
+  }
+
+  setRuntimeBackend(backend: AssistantRuntimeBackend): void {
+    this.writeSetting(STORE_KEYS.ASSISTANT_RUNTIME_BACKEND, normalizeRuntimeBackend(backend));
   }
 
   getCurrentToolResultLimit(): number {

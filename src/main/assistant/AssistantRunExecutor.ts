@@ -25,7 +25,7 @@ import type { LlamaChatCompletionResponse, LlamaChatMessage, LlamaToolCall } fro
 type ApprovalResolver = (approved: boolean) => void;
 
 interface ModelLookup {
-  getInstalledModelById(modelId: string): AssistantInstalledModel | null | undefined;
+  getInstalledModelById(modelId: string): Promise<AssistantInstalledModel | null | undefined> | AssistantInstalledModel | null | undefined;
 }
 
 export interface ChatRuntime {
@@ -104,7 +104,7 @@ export class AssistantRunExecutor {
           break;
         }
 
-        const installedModel = this.options.modelLookup.getInstalledModelById(modelId);
+        const installedModel = await this.options.modelLookup.getInstalledModelById(modelId);
         if (!installedModel) {
           throw new Error('Selected model is not installed anymore');
         }

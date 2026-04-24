@@ -62,6 +62,10 @@ export function registerAssistantIpcHandlers({
     return assistantRuntime.deleteModel(modelId);
   });
 
+  ipcMain.handle(IPC_CHANNELS.ASSISTANT_SET_RUNTIME_BACKEND, async (_event: IpcMainInvokeEvent, backend: 'embedded' | 'ollama') => {
+    return assistantRuntime.setRuntimeBackend(backend);
+  });
+
   ipcMain.handle(IPC_CHANNELS.ASSISTANT_SET_ACTIVE_MODEL, async (_event: IpcMainInvokeEvent, threadId: string, model: string) => {
     return assistantRuntime.setActiveModel(threadId, model);
   });
