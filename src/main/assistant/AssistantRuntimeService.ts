@@ -19,7 +19,6 @@ import type {
   AssistantThread,
   ToolApprovalRequest,
 } from '../../shared/types';
-import { ASSISTANT_DEFAULT_MODEL } from './constants';
 import { ModelInstallService } from './ModelInstallService';
 import { EmbeddedLlamaRuntimeService } from './EmbeddedLlamaRuntimeService';
 import { AssistantRuntimeSettings } from './AssistantRuntimeSettings';
@@ -27,11 +26,12 @@ import { AssistantThreadRepository } from './AssistantThreadRepository';
 import { AssistantMessageSerializer } from './AssistantMessageSerializer';
 import { AssistantToolExecutor } from './AssistantToolExecutor';
 import { AssistantRunExecutor, type ChatRuntime } from './AssistantRunExecutor';
-import { AiSdkLlamaRuntimeAdapter } from './AiSdkLlamaRuntimeAdapter';
 import { OllamaRuntimeService } from './OllamaRuntimeService';
-
-const ASSISTANT_RUNTIME_ADAPTER_ENV = 'TALK_TO_FIGMA_ASSISTANT_RUNTIME';
-const AI_SDK_RUNTIME_ADAPTER_VALUE = 'ai-sdk';
+import { EmbeddedAssistantBackend } from './EmbeddedAssistantBackend';
+import { OllamaAssistantBackend } from './OllamaAssistantBackend';
+import type { AssistantRuntimeBackendAdapter } from './AssistantRuntimeBackendAdapter';
+import { resolveAssistantActiveModel } from './AssistantActiveModelResolver';
+import { AssistantRuntimeBackendCoordinator } from './AssistantRuntimeBackendCoordinator';
 
 interface AssistantEventHandlers {
   onRunEvent?: (event: AssistantRunEvent) => void;
@@ -59,14 +59,16 @@ export class AssistantRuntimeService {
 
   private readonly modelInstallService: ModelInstallService;
   private readonly embeddedRuntimeService: EmbeddedLlamaRuntimeService;
-  private readonly embeddedChatRuntime: ChatRuntime;
   private readonly ollamaRuntimeService: OllamaRuntimeService;
+  private readonly embeddedBackend: EmbeddedAssistantBackend;
+  private readonly runtimeBackends: Record<AssistantRuntimeBackend, AssistantRuntimeBackendAdapter>;
   private readonly chatRuntime: ChatRuntime;
   private readonly runtimeSettings: AssistantRuntimeSettings;
   private readonly threadRepository: AssistantThreadRepository;
   private readonly messageSerializer: AssistantMessageSerializer;
   private readonly toolExecutor: AssistantToolExecutor;
   private readonly runExecutor: AssistantRunExecutor;
+  private readonly backendCoordinator: AssistantRuntimeBackendCoordinator;
 
   private handlers: AssistantEventHandlers = {};
 
@@ -87,10 +89,21 @@ export class AssistantRuntimeService {
         void this.handleRuntimeStateChanged();
       },
     });
-    this.embeddedChatRuntime = this.createEmbeddedChatRuntime();
     this.ollamaRuntimeService = new OllamaRuntimeService({
       runtimeSettings: this.runtimeSettings,
     });
+    this.embeddedBackend = new EmbeddedAssistantBackend({
+      modelInstallService: this.modelInstallService,
+      embeddedRuntimeService: this.embeddedRuntimeService,
+      logger: this.logger,
+    });
+    this.runtimeBackends = {
+      embedded: this.embeddedBackend,
+      ollama: new OllamaAssistantBackend({
+        ollamaRuntimeService: this.ollamaRuntimeService,
+        getRecommendedModel: () => this.modelInstallService.getRecommendedModel(),
+      }),
+    };
     this.chatRuntime = this.createRuntimeRouter();
 
     this.toolExecutor = new AssistantToolExecutor(this.wsClient, this.messageSerializer);
@@ -110,8 +123,16 @@ export class AssistantRuntimeService {
         this.logger.warn(`Assistant context length increased automatically (${currentContext} -> ${nextContext})`);
       },
     });
+    this.backendCoordinator = new AssistantRuntimeBackendCoordinator({
+      runtimeSettings: this.runtimeSettings,
+      runtimeBackends: this.runtimeBackends,
+      shutdownRuns: () => this.runExecutor.shutdown(),
+      pruneInvalidThreadModels: () => this.pruneInvalidThreadModels(),
+      emitRuntimeStatusChange: (threadId) => this.emitRuntimeStatusChange(threadId),
+      getLastOpenedThreadId: () => this.threadRepository.getLastOpenedThreadId(),
+    });
 
-    this.pruneInvalidThreadModels();
+    void this.pruneInvalidThreadModels();
   }
 
   static getInstance(): AssistantRuntimeService {
@@ -132,144 +153,50 @@ export class AssistantRuntimeService {
   async shutdown(): Promise<void> {
     this.logger.info('Shutting down assistant runtime');
     this.runExecutor.shutdown();
-    await this.embeddedRuntimeService.stop();
+    await Promise.all(Object.values(this.runtimeBackends).map((backend) => backend.deactivate()));
   }
 
   async listModels(): Promise<string[]> {
-    if (this.runtimeSettings.getRuntimeBackend() === 'ollama') {
-      const snapshot = await this.ollamaRuntimeService.getSnapshot();
-      return snapshot.models.map((model) => model.id);
-    }
-
-    return this.modelInstallService.getInstalledModels().map((model) => model.id);
+    return this.getCurrentBackend().listModels();
   }
 
   async listModelCatalog(): Promise<AssistantModelCatalogItem[]> {
-    return this.modelInstallService.getCatalog();
+    return this.embeddedBackend.listModelCatalog();
   }
 
   async downloadModel(modelId: string): Promise<{ success: boolean; error?: string }> {
-    if (this.runtimeSettings.getRuntimeBackend() === 'ollama') {
-      return { success: false, error: 'Model downloads are managed by Ollama. Run "ollama pull <model>" in Terminal.' };
-    }
-
-    const result = await this.modelInstallService.downloadModel(modelId);
-    this.pruneInvalidThreadModels();
+    const result = await this.getCurrentBackend().downloadModel(modelId);
+    await this.pruneInvalidThreadModels();
     await this.emitRuntimeStatusChange(this.threadRepository.getLastOpenedThreadId() ?? undefined);
     return result;
   }
 
   async cancelModelDownload(): Promise<{ success: boolean; error?: string }> {
-    const result = this.modelInstallService.cancelDownload();
+    const result = await this.getCurrentBackend().cancelModelDownload();
     await this.emitRuntimeStatusChange(this.threadRepository.getLastOpenedThreadId() ?? undefined);
     return result;
   }
 
   async uploadModel(payload: AssistantModelUploadRequest): Promise<{ success: boolean; modelId?: string; error?: string }> {
-    if (this.runtimeSettings.getRuntimeBackend() === 'ollama') {
-      return { success: false, error: 'GGUF upload is only available for the embedded runtime.' };
-    }
-
-    const result = await this.modelInstallService.uploadModel(payload);
-    this.pruneInvalidThreadModels();
+    const result = await this.getCurrentBackend().uploadModel(payload);
+    await this.pruneInvalidThreadModels();
     await this.emitRuntimeStatusChange(this.threadRepository.getLastOpenedThreadId() ?? undefined);
     return result;
   }
 
   async deleteModel(modelId: string): Promise<{ success: boolean; error?: string }> {
-    if (this.runtimeSettings.getRuntimeBackend() === 'ollama') {
-      return { success: false, error: 'Remove Ollama models with "ollama rm <model>" in Terminal.' };
-    }
-
-    const result = this.modelInstallService.deleteModel(modelId);
-    if (result.success) {
-      await this.embeddedRuntimeService.stop();
-    }
-    this.pruneInvalidThreadModels();
+    const result = await this.getCurrentBackend().deleteModel(modelId);
+    await this.pruneInvalidThreadModels();
     await this.emitRuntimeStatusChange(this.threadRepository.getLastOpenedThreadId() ?? undefined);
     return result;
   }
 
   async getRuntimeStatus(threadId?: string): Promise<AssistantRuntimeStatus> {
-    if (this.runtimeSettings.getRuntimeBackend() === 'ollama') {
-      return this.getOllamaRuntimeStatus(threadId);
-    }
-
-    return this.getEmbeddedRuntimeStatus(threadId);
-  }
-
-  private async getEmbeddedRuntimeStatus(threadId?: string): Promise<AssistantRuntimeStatus> {
-    const installedModelDetails = this.modelInstallService.getInstalledModels();
-    const installedModels = installedModelDetails.map((model) => model.id);
-    const recommendedModel = this.modelInstallService.getRecommendedModel();
     const thread = threadId ? this.threadRepository.findThreadById(threadId) : null;
-    const activeModel = this.resolveActiveModel(thread, installedModels);
-    const activeModelDetail = installedModelDetails.find((model) => model.id === activeModel) ?? null;
-    const downloadSnapshot = this.modelInstallService.getDownloadSnapshot();
-    const runtimeBinaryStatus = this.embeddedRuntimeService.getRuntimeBinaryStatus();
-
-    const modelInstalled = installedModels.length > 0;
-    const health = modelInstalled && runtimeBinaryStatus.ready ? this.embeddedRuntimeService.getHealth() : 'error';
-
-    let error = downloadSnapshot.error ?? this.embeddedRuntimeService.getError();
-    if (!modelInstalled && downloadSnapshot.state !== 'downloading' && downloadSnapshot.state !== 'verifying') {
-      error ??= 'No model is installed yet. Download the recommended model or upload GGUF files in Settings > Model.';
-    } else if (modelInstalled && !runtimeBinaryStatus.ready) {
-      error ??= 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.';
-    }
-
-    return {
-      backend: 'embedded',
-      health,
-      modelInstalled,
-      runtimeBinaryReady: runtimeBinaryStatus.ready,
-      runtimeBinarySource: runtimeBinaryStatus.source,
-      ...(runtimeBinaryStatus.path ? { runtimeBinaryPath: runtimeBinaryStatus.path } : {}),
-      activeModel,
-      installedModels,
-      installedModelDetails,
-      defaultModel: ASSISTANT_DEFAULT_MODEL,
-      recommendedModel,
-      supportsVision: Boolean(activeModelDetail?.supportsVision),
-      downloadState: downloadSnapshot.state,
-      ...(downloadSnapshot.progress ? { downloadProgress: downloadSnapshot.progress } : {}),
-      ...(error ? { error } : {}),
-    };
-  }
-
-  private async getOllamaRuntimeStatus(threadId?: string): Promise<AssistantRuntimeStatus> {
-    const snapshot = await this.ollamaRuntimeService.getSnapshot();
-    const installedModelDetails = snapshot.models;
-    const installedModels = installedModelDetails.map((model) => model.id);
-    const recommendedModel = this.modelInstallService.getRecommendedModel();
-    const thread = threadId ? this.threadRepository.findThreadById(threadId) : null;
-    const activeModel = this.resolveActiveModel(thread, installedModels);
-    const activeModelDetail = installedModelDetails.find((model) => model.id === activeModel) ?? null;
-    const modelInstalled = installedModels.length > 0;
-    const health = snapshot.daemonReachable && modelInstalled ? 'ready' : 'error';
-
-    let error = snapshot.error;
-    if (snapshot.daemonReachable && !modelInstalled) {
-      error = `No Ollama models are available. Run "ollama pull ${recommendedModel.id}" in Terminal, then refresh.`;
-    }
-
-    return {
-      backend: 'ollama',
-      health,
-      modelInstalled,
-      runtimeBinaryReady: snapshot.daemonReachable,
-      runtimeBinarySource: 'external',
-      daemonReachable: snapshot.daemonReachable,
-      baseUrl: this.ollamaRuntimeService.getBaseUrl(),
-      activeModel,
-      installedModels,
-      installedModelDetails,
-      defaultModel: ASSISTANT_DEFAULT_MODEL,
-      recommendedModel,
-      supportsVision: Boolean(activeModelDetail?.supportsVision),
-      downloadState: 'idle',
-      ...(error ? { error } : {}),
-    };
+    return this.getCurrentBackend().getRuntimeStatus({
+      thread,
+      resolveActiveModel: (installedModels) => this.resolveActiveModel(thread, installedModels),
+    });
   }
 
   async createThread(title?: string): Promise<AssistantThread> {
@@ -325,21 +252,7 @@ export class AssistantRuntimeService {
   }
 
   async setRuntimeBackend(backend: AssistantRuntimeBackend): Promise<{ success: boolean; error?: string }> {
-    const normalizedBackend = backend === 'ollama' ? 'ollama' : 'embedded';
-    const previousBackend = this.runtimeSettings.getRuntimeBackend();
-    if (previousBackend === normalizedBackend) {
-      await this.emitRuntimeStatusChange(this.threadRepository.getLastOpenedThreadId() ?? undefined);
-      return { success: true };
-    }
-
-    this.runExecutor.shutdown();
-    this.runtimeSettings.setRuntimeBackend(normalizedBackend);
-    if (normalizedBackend === 'ollama') {
-      await this.embeddedRuntimeService.stop();
-    }
-    this.pruneInvalidThreadModels();
-    await this.emitRuntimeStatusChange(this.threadRepository.getLastOpenedThreadId() ?? undefined);
-    return { success: true };
+    return this.backendCoordinator.setRuntimeBackend(backend);
   }
 
   async sendMessage(
@@ -450,37 +363,19 @@ export class AssistantRuntimeService {
   }
 
   private resolveActiveModel(thread: AssistantThread | null, installedModels: string[]): string | null {
-    if (thread?.activeModel && installedModels.includes(thread.activeModel)) {
-      return thread.activeModel;
-    }
-
-    const globalModel = this.threadRepository.getGlobalActiveModel();
-    if (globalModel && installedModels.includes(globalModel)) {
-      return globalModel;
-    }
-
-    if (installedModels.includes(ASSISTANT_DEFAULT_MODEL)) {
-      return ASSISTANT_DEFAULT_MODEL;
-    }
-
-    return installedModels[0] ?? null;
+    return resolveAssistantActiveModel({
+      thread,
+      globalModel: this.threadRepository.getGlobalActiveModel(),
+      installedModels,
+    });
   }
 
-  private pruneInvalidThreadModels(): void {
+  private async pruneInvalidThreadModels(): Promise<void> {
     if (this.runtimeSettings.getRuntimeBackend() === 'embedded') {
       this.threadRepository.pruneInvalidThreadModels(
-        this.modelInstallService.getInstalledModels().map((model) => model.id),
+        await this.runtimeBackends.embedded.listModels(),
       );
     }
-  }
-
-  private createEmbeddedChatRuntime(): ChatRuntime {
-    if (process.env[ASSISTANT_RUNTIME_ADAPTER_ENV] === AI_SDK_RUNTIME_ADAPTER_VALUE) {
-      this.logger.warn('Assistant AI SDK llama runtime adapter enabled for local PoC');
-      return new AiSdkLlamaRuntimeAdapter(this.embeddedRuntimeService);
-    }
-
-    return this.embeddedRuntimeService;
   }
 
   private createRuntimeRouter(): ChatRuntime {
@@ -493,17 +388,14 @@ export class AssistantRuntimeService {
   }
 
   private getCurrentChatRuntime(): ChatRuntime {
-    return this.runtimeSettings.getRuntimeBackend() === 'ollama'
-      ? this.ollamaRuntimeService
-      : this.embeddedChatRuntime;
+    return this.getCurrentBackend();
+  }
+
+  private getCurrentBackend(): AssistantRuntimeBackendAdapter {
+    return this.runtimeBackends[this.runtimeSettings.getRuntimeBackend()];
   }
 
   private async getActiveBackendModelById(modelId: string): Promise<ReturnType<ModelInstallService['getInstalledModelById']>> {
-    if (this.runtimeSettings.getRuntimeBackend() === 'ollama') {
-      const snapshot = await this.ollamaRuntimeService.getSnapshot();
-      return snapshot.models.find((model) => model.id === modelId) ?? null;
-    }
-
-    return this.modelInstallService.getInstalledModelById(modelId);
+    return this.getCurrentBackend().getModelById(modelId);
   }
 }
