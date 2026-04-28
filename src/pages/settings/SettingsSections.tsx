@@ -1,5 +1,5 @@
-import type { ChangeEvent, RefObject } from 'react'
-import { Link2, Copy, AlertTriangle, Cpu, Download, Loader2, RefreshCw, Terminal, Trash2, Upload } from 'lucide-react'
+import { useState, type ChangeEvent, type RefObject } from 'react'
+import { Link2, Copy, AlertTriangle, ChevronDown, Cpu, Download, Loader2, RefreshCw, Terminal, Trash2, Upload } from 'lucide-react'
 import { Figma, MCP } from '@lobehub/icons'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -51,6 +51,7 @@ export function ModelSettingsSection({
   onActivateModel,
   onDeleteModel,
 }: ModelSettingsSectionProps) {
+  const [showUploadPanel, setShowUploadPanel] = useState(false)
   const recommendedModel = runtimeStatus?.recommendedModel
   const recommendedSizeBytes = (recommendedModel?.modelSizeBytes ?? 0) + (recommendedModel?.mmprojSizeBytes ?? 0)
   const downloadProgress = runtimeStatus?.downloadProgress
@@ -63,6 +64,8 @@ export function ModelSettingsSection({
   const sortedInstalledModels = [...(runtimeStatus?.installedModelDetails ?? [])].sort((a, b) => b.installedAt - a.installedAt)
   const backend = runtimeStatus?.backend ?? 'embedded'
   const isOllama = backend === 'ollama'
+  const hasInstalledModels = sortedInstalledModels.length > 0
+  const showRecommendedCard = !isOllama && (!hasInstalledModels || runtimeStatus?.downloadState === 'downloading' || runtimeStatus?.downloadState === 'verifying' || runtimeStatus?.downloadState === 'failed')
   const ollamaPullModel = sortedInstalledModels[0]?.id ?? recommendedModel?.id ?? 'gemma4:e4b'
   const runtimeStatusLabel = isOllama
     ? runtimeStatus?.daemonReachable
@@ -162,83 +165,21 @@ export function ModelSettingsSection({
               </div>
             ) : null}
           </div>
-        ) : (
-          <>
-        <div className="rounded-lg border p-3 space-y-2">
-          <p className="font-medium">Recommended model</p>
-          <p className="text-sm">{recommendedModel?.displayName ?? 'gemma4:e4b'}</p>
-          <p className="text-muted-foreground text-xs">
-            {recommendedModel?.id ?? 'gemma4:e4b'} · {formatBytes(recommendedSizeBytes)}
-          </p>
-          <p className="text-muted-foreground text-xs capitalize">
-            Download state: {runtimeStatus?.downloadState ?? 'idle'}
-          </p>
-          <p className="text-muted-foreground text-xs">
-            Runtime: {runtimeBinaryReady ? 'Ready' : 'Missing'}
-            {runtimeStatus?.runtimeBinarySource ? ` (${runtimeStatus.runtimeBinarySource})` : ''}
-          </p>
-          {runtimeBinaryPath ? (
-            <p className="text-muted-foreground break-all text-[11px]">
-              {runtimeBinaryPath}
-            </p>
-          ) : null}
-
-          {downloadProgress ? (
-            <div className="space-y-2 pt-1">
-              <Progress value={progressPercent} />
-              <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-                <span>{formatBytes(downloadProgress.downloadedBytes)} / {formatBytes(downloadProgress.totalBytes)}</span>
-                <span>{formatBytes(downloadProgress.speedBytesPerSecond)}/s</span>
-                <span>ETA {formatEta(downloadProgress.etaSeconds)}</span>
-                {downloadProgress.currentFile ? <span>{downloadProgress.currentFile}</span> : null}
-              </div>
-            </div>
-          ) : null}
-
-          {runtimeStatus?.error ? (
-            <p className="text-destructive text-xs">{runtimeStatus.error}</p>
-          ) : null}
-
-          <div className="flex items-center gap-2 pt-1">
-            <Button onClick={onDownloadRecommendedModel} disabled={isWorking || isDownloading}>
-              {isWorking || isDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-              {runtimeStatus?.downloadState === 'failed' ? 'Retry Download' : 'Download Recommended'}
-            </Button>
-            <Button variant="outline" onClick={onRefreshModelStatus} disabled={isWorking}>
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        <div className="rounded-lg border p-3 space-y-3">
-          <p className="font-medium">Upload GGUF model</p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => ggufInputRef.current?.click()} disabled={isWorking}>
-              <Upload className="size-4" />
-              Select GGUF
-            </Button>
-            <Button variant="outline" onClick={() => mmprojInputRef.current?.click()} disabled={isWorking}>
-              <Upload className="size-4" />
-              Select mmproj (optional)
-            </Button>
-          </div>
-          <input ref={ggufInputRef} type="file" accept=".gguf" className="hidden" onChange={onSelectGguf} />
-          <input ref={mmprojInputRef} type="file" accept=".gguf" className="hidden" onChange={onSelectMmproj} />
-          <p className="text-muted-foreground text-xs">GGUF: {ggufFile?.name ?? 'Not selected'}</p>
-          <p className="text-muted-foreground text-xs">mmproj: {mmprojFile?.name ?? 'Not selected'}</p>
-          <Input
-            value={displayName}
-            onChange={(event) => onDisplayNameChange(event.target.value)}
-            placeholder="Display name (optional)"
-            disabled={isWorking}
+        ) : showRecommendedCard ? (
+          <EmbeddedRecommendedModelCard
+            recommendedModel={recommendedModel}
+            recommendedSizeBytes={recommendedSizeBytes}
+            runtimeStatus={runtimeStatus}
+            runtimeBinaryReady={runtimeBinaryReady}
+            runtimeBinaryPath={runtimeBinaryPath}
+            progressPercent={progressPercent}
+            downloadProgress={downloadProgress}
+            isWorking={isWorking}
+            isDownloading={isDownloading}
+            onDownloadRecommendedModel={onDownloadRecommendedModel}
+            onRefreshModelStatus={onRefreshModelStatus}
           />
-          <Button onClick={onUploadModel} disabled={isWorking || !ggufFile}>
-            {isWorking ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-            Upload Model
-          </Button>
-        </div>
-          </>
-        )}
+        ) : null}
 
         <div className="rounded-lg border p-3 space-y-2">
           <p className="font-medium">{isOllama ? 'Ollama models' : 'Installed models'}</p>
@@ -282,9 +223,173 @@ export function ModelSettingsSection({
               )
             })
           )}
+          {!isOllama ? (
+            <EmbeddedUploadSection
+              showUploadPanel={showUploadPanel}
+              onToggle={() => setShowUploadPanel((current) => !current)}
+              ggufInputRef={ggufInputRef}
+              mmprojInputRef={mmprojInputRef}
+              ggufFile={ggufFile}
+              mmprojFile={mmprojFile}
+              displayName={displayName}
+              isWorking={isWorking}
+              onSelectGguf={onSelectGguf}
+              onSelectMmproj={onSelectMmproj}
+              onDisplayNameChange={onDisplayNameChange}
+              onUploadModel={onUploadModel}
+            />
+          ) : null}
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function EmbeddedRecommendedModelCard({
+  recommendedModel,
+  recommendedSizeBytes,
+  runtimeStatus,
+  runtimeBinaryReady,
+  runtimeBinaryPath,
+  progressPercent,
+  downloadProgress,
+  isWorking,
+  isDownloading,
+  onDownloadRecommendedModel,
+  onRefreshModelStatus,
+}: {
+  recommendedModel: AssistantRuntimeStatus['recommendedModel'] | undefined
+  recommendedSizeBytes: number
+  runtimeStatus: AssistantRuntimeStatus | null
+  runtimeBinaryReady: boolean
+  runtimeBinaryPath: string | null
+  progressPercent: number
+  downloadProgress: AssistantRuntimeStatus['downloadProgress']
+  isWorking: boolean
+  isDownloading: boolean
+  onDownloadRecommendedModel: () => void
+  onRefreshModelStatus: () => void
+}) {
+  return (
+    <div className="rounded-lg border p-3 space-y-2">
+      <p className="font-medium">Recommended model</p>
+      <p className="text-sm">{recommendedModel?.displayName ?? 'gemma4:e4b'}</p>
+      <p className="text-muted-foreground text-xs">
+        {recommendedModel?.id ?? 'gemma4:e4b'} · {formatBytes(recommendedSizeBytes)}
+      </p>
+      <p className="text-muted-foreground text-xs capitalize">
+        Download state: {runtimeStatus?.downloadState ?? 'idle'}
+      </p>
+      <p className="text-muted-foreground text-xs">
+        Runtime: {runtimeBinaryReady ? 'Ready' : 'Missing'}
+        {runtimeStatus?.runtimeBinarySource ? ` (${runtimeStatus.runtimeBinarySource})` : ''}
+      </p>
+      {runtimeBinaryPath ? (
+        <p className="text-muted-foreground break-all text-[11px]">
+          {runtimeBinaryPath}
+        </p>
+      ) : null}
+
+      {downloadProgress ? (
+        <div className="space-y-2 pt-1">
+          <Progress value={progressPercent} />
+          <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+            <span>{formatBytes(downloadProgress.downloadedBytes)} / {formatBytes(downloadProgress.totalBytes)}</span>
+            <span>{formatBytes(downloadProgress.speedBytesPerSecond)}/s</span>
+            <span>ETA {formatEta(downloadProgress.etaSeconds)}</span>
+            {downloadProgress.currentFile ? <span>{downloadProgress.currentFile}</span> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {runtimeStatus?.error ? (
+        <p className="text-destructive text-xs">{runtimeStatus.error}</p>
+      ) : null}
+
+      <div className="flex items-center gap-2 pt-1">
+        <Button onClick={onDownloadRecommendedModel} disabled={isWorking || isDownloading}>
+          {isWorking || isDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          {runtimeStatus?.downloadState === 'failed' ? 'Retry Download' : 'Download Recommended'}
+        </Button>
+        <Button variant="outline" onClick={onRefreshModelStatus} disabled={isWorking}>
+          Refresh
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function EmbeddedUploadSection({
+  showUploadPanel,
+  onToggle,
+  ggufInputRef,
+  mmprojInputRef,
+  ggufFile,
+  mmprojFile,
+  displayName,
+  isWorking,
+  onSelectGguf,
+  onSelectMmproj,
+  onDisplayNameChange,
+  onUploadModel,
+}: {
+  showUploadPanel: boolean
+  onToggle: () => void
+  ggufInputRef: RefObject<HTMLInputElement | null>
+  mmprojInputRef: RefObject<HTMLInputElement | null>
+  ggufFile: File | null
+  mmprojFile: File | null
+  displayName: string
+  isWorking: boolean
+  onSelectGguf: (event: ChangeEvent<HTMLInputElement>) => void
+  onSelectMmproj: (event: ChangeEvent<HTMLInputElement>) => void
+  onDisplayNameChange: (value: string) => void
+  onUploadModel: () => void
+}) {
+  return (
+    <div className="border-t pt-3 mt-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="font-medium text-sm">Add custom GGUF model</p>
+          <p className="text-muted-foreground text-xs">
+            Upload a model only when you want to add something beyond the recommended setup.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onToggle} disabled={isWorking}>
+          <ChevronDown className={`size-4 transition-transform ${showUploadPanel ? 'rotate-180' : ''}`} />
+          {showUploadPanel ? 'Hide' : 'Open'}
+        </Button>
+      </div>
+
+      {showUploadPanel ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => ggufInputRef.current?.click()} disabled={isWorking}>
+              <Upload className="size-4" />
+              Select GGUF
+            </Button>
+            <Button variant="outline" onClick={() => mmprojInputRef.current?.click()} disabled={isWorking}>
+              <Upload className="size-4" />
+              Select mmproj (optional)
+            </Button>
+          </div>
+          <input ref={ggufInputRef} type="file" accept=".gguf" className="hidden" onChange={onSelectGguf} />
+          <input ref={mmprojInputRef} type="file" accept=".gguf" className="hidden" onChange={onSelectMmproj} />
+          <p className="text-muted-foreground text-xs">GGUF: {ggufFile?.name ?? 'Not selected'}</p>
+          <p className="text-muted-foreground text-xs">mmproj: {mmprojFile?.name ?? 'Not selected'}</p>
+          <Input
+            value={displayName}
+            onChange={(event) => onDisplayNameChange(event.target.value)}
+            placeholder="Display name (optional)"
+            disabled={isWorking}
+          />
+          <Button onClick={onUploadModel} disabled={isWorking || !ggufFile}>
+            {isWorking ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+            Upload Model
+          </Button>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
