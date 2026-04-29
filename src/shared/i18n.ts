@@ -125,7 +125,7 @@ function createLocaleResources(locale: AppLocale, _nativeName: string): Translat
       connectFigma: locale === 'ko' ? 'Figma 연결' : locale === 'ru' ? 'Подключить Figma' : locale === 'hi' ? 'Figma कनेक्ट करें' : locale === 'ta' ? 'Figma இணை' : 'Connect Figma',
     },
     server: {
-      startServer: locale === 'ko' ? '서버 시작' : locale === 'ru' ? 'Запустить сервер' : locale === 'hi' ? 'सर्वर शुरू करें' : locale === 'ta' ? 'தொடங்கு' : 'Start Server',
+      startServer: locale === 'ko' ? '서버 시작' : locale === 'ru' ? 'Запустить' : locale === 'hi' ? 'सर्वर शुरू करें' : locale === 'ta' ? 'தொடங்கு' : 'Start Server',
       stopServer: locale === 'ko' ? '서버 중지' : locale === 'ru' ? 'Остановить сервер' : locale === 'hi' ? 'सर्वर रोकें' : locale === 'ta' ? 'நிறுத்து' : 'Stop Server',
       restartServer: locale === 'ko' ? '서버 재시작' : locale === 'ru' ? 'Перезапустить сервер' : locale === 'hi' ? 'सर्वर रीस्टार्ट करें' : locale === 'ta' ? 'மீள்தொடு' : 'Restart server',
       figmaBridge: locale === 'ko' ? 'Figma 브리지' : locale === 'ru' ? 'Мост Figma' : locale === 'hi' ? 'Figma ब्रिज' : locale === 'ta' ? 'Figma பாலம்' : 'Figma Bridge',
@@ -446,7 +446,7 @@ function createLocaleResources(locale: AppLocale, _nativeName: string): Translat
       },
       tray: {
         tooltip: locale === 'ko' ? 'TalkToFigma Desktop - Figma 자동화' : locale === 'ru' ? 'TalkToFigma Desktop - автоматизация Figma' : locale === 'hi' ? 'TalkToFigma Desktop - Figma ऑटोमेशन' : locale === 'ta' ? 'TalkToFigma Desktop - Figma தானியக்கம்' : 'TalkToFigma Desktop - Figma Automation',
-        startServer: locale === 'ko' ? '○ 서버 시작' : locale === 'ru' ? '○ Запустить сервер' : locale === 'hi' ? '○ सर्वर शुरू करें' : locale === 'ta' ? '○ தொடங்கு' : '○ Start Server',
+        startServer: locale === 'ko' ? '○ 서버 시작' : locale === 'ru' ? '○ Запустить' : locale === 'hi' ? '○ सर्वर शुरू करें' : locale === 'ta' ? '○ தொடங்கு' : '○ Start Server',
         stopServer: locale === 'ko' ? '⬤ 서버 중지' : locale === 'ru' ? '⬤ Остановить сервер' : locale === 'hi' ? '⬤ सर्वर रोकें' : locale === 'ta' ? '⬤ நிறுத்து' : '⬤ Stop Server',
       },
       updater: {
