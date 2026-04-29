@@ -5,6 +5,7 @@
  */
 
 import { BRANDING } from './branding';
+import type { AppLocale } from './i18n';
 
 // Shared constants across main and renderer processes
 
@@ -124,6 +125,7 @@ export const STORE_KEYS = {
 
   // App settings
   APP_THEME: 'app.theme',
+  APP_LOCALE: 'app.locale',
   APP_FIRST_LAUNCH: 'app.firstLaunch',
   APP_SHOW_TUTORIAL: 'app.showTutorial',
 
@@ -144,6 +146,8 @@ export const STORE_KEYS = {
   ANALYTICS_CLIENT_ID: 'analytics.clientId',
   ANALYTICS_FIRST_OPEN_SENT: 'analytics.firstOpenSent',
 } as const;
+
+export type { AppLocale };
 
 export const ASSISTANT_CONTEXT_LENGTH = {
   DEFAULT: 16_384,

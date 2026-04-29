@@ -14,41 +14,42 @@ export type ConfigStatus =
 /**
  * Get status badge info (color, icon, label)
  */
-export function getStatusBadgeInfo(status: ConfigStatus): {
+export function getStatusBadgeInfo(status: ConfigStatus, t?: (key: string) => string): {
   variant: 'default' | 'secondary' | 'destructive' | 'outline'
   label: string
   icon: string
 } {
+  const translate = t ?? ((key: string) => key)
   switch (status) {
     case 'configured':
       return {
         variant: 'default',
-        label: 'Configured',
+        label: translate('mcp.status.configured'),
         icon: '✅'
       }
     case 'exists-not-configured':
       return {
         variant: 'secondary',
-        label: 'Not Configured',
+        label: translate('mcp.status.notConfigured'),
         icon: '⚠️'
       }
     case 'not-found':
       return {
         variant: 'outline',
-        label: 'Not Detected',
+        label: translate('mcp.status.notDetected'),
         icon: '⚪'
       }
     case 'no-permission':
       return {
         variant: 'destructive',
-        label: 'No Permission',
+        label: translate('mcp.status.noPermission'),
         icon: '🔒'
       }
     case 'unknown':
     default:
       return {
         variant: 'outline',
-        label: 'Unknown',
+        label: translate('mcp.status.unknown'),
         icon: '❓'
       }
   }

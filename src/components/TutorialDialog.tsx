@@ -20,6 +20,7 @@ import { Youtube } from 'lucide-react'
 import { Figma } from '@lobehub/icons'
 import { McpMultiClientConfig } from '@/components/mcp'
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti'
+import { useTranslation } from 'react-i18next'
 
 interface TutorialDialogProps {
   open: boolean
@@ -35,6 +36,7 @@ interface TutorialStep {
 }
 
 export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialogProps) {
+  const { t } = useTranslation()
   const [currentStep, setCurrentStep] = useState(0)
   const confettiRef = useRef<ConfettiRef>(null)
   const hasTrackedShown = useRef(false)
@@ -57,18 +59,18 @@ export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialo
   const steps: TutorialStep[] = [
     {
       id: 'server-and-mcp',
-      title: 'Step 1: Start Server & Configure MCP',
-      description: 'Launch the WebSocket server and register MCP',
+      title: t('tutorial.step1Title'),
+      description: t('tutorial.step1Description'),
       content: (
         <div className="space-y-4">
           <div className="rounded-lg bg-muted/50 p-4">
             <p className="text-sm text-muted-foreground">
-              Click <strong>"Start All"</strong> in the sidebar to launch the server.
+              {t('tutorial.step1Body')}
             </p>
           </div>
 
           <div className="space-y-2">
-            <h4 className="font-semibold text-sm">Configure MCP Client</h4>
+            <h4 className="font-semibold text-sm">{t('tutorial.configureMcpClient')}</h4>
             <div className="border rounded-lg p-4 bg-muted/30">
               <McpMultiClientConfig />
             </div>
@@ -78,8 +80,8 @@ export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialo
     },
     {
       id: 'figma-plugin',
-      title: 'Step 2: Connect Figma Plugin',
-      description: 'Connect TalkToFigma plugin to the server',
+      title: t('tutorial.step2Title'),
+      description: t('tutorial.step2Description'),
       content: (
         <div className="space-y-4">
           <Button
@@ -87,20 +89,20 @@ export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialo
             onClick={() => window.electron?.shell?.openExternal?.('https://www.figma.com/community/plugin/1485687494525374295/talk-to-figma-mcp-plugin')}
           >
             <Figma className="mr-2" size={16} />
-            Install Plugin
+            {t('tutorial.installPlugin')}
           </Button>
 
           <div className="space-y-3">
             <div className="flex items-start gap-3">
               <Badge variant="outline" className="mt-0.5">1</Badge>
               <p className="text-sm text-muted-foreground flex-1">
-                Open Figma and search for "TalkToFigma" plugin
+                {t('tutorial.step2Item1')}
               </p>
             </div>
             <div className="flex items-start gap-3">
               <Badge variant="outline" className="mt-0.5">2</Badge>
               <p className="text-sm text-muted-foreground flex-1">
-                Run the plugin and click "Connect"
+                {t('tutorial.step2Item2')}
               </p>
             </div>
           </div>
@@ -109,22 +111,22 @@ export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialo
     },
     {
       id: 'get-started',
-      title: 'Step 3: Join Channel & Start Using',
-      description: 'Connect to channel and explore features',
+      title: t('tutorial.step3Title'),
+      description: t('tutorial.step3Description'),
       content: (
         <div className="space-y-4">
           <div className="space-y-3">
             <p className="text-2xl text-center">🎉</p>
             <p className="text-base font-semibold text-center">
-              You're ready to control Figma with AI!
+              {t('tutorial.readyTitle')}
             </p>
             <p className="text-sm text-muted-foreground text-center">
-              Connect to a channel in your AI client and start using TalkToFigma
+              {t('tutorial.readyBody')}
             </p>
           </div>
 
           <div className="space-y-3">
-            <p className="text-sm font-medium">Video Tutorials</p>
+            <p className="text-sm font-medium">{t('tutorial.videoTutorials')}</p>
             <div className="space-y-2">
               <a
                 href="#"
@@ -135,7 +137,7 @@ export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialo
                 className="flex items-center gap-2 text-sm text-primary hover:underline cursor-pointer"
               >
                 <Youtube className="h-4 w-4" />
-                Talk To Figma Usage Examples
+                {t('tutorial.usageExamples')}
               </a>
               <a
                 href="#"
@@ -146,7 +148,7 @@ export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialo
                 className="flex items-center gap-2 text-sm text-primary hover:underline cursor-pointer"
               >
                 <Youtube className="h-4 w-4" />
-                Figma Tutor's Installation Guide
+                {t('tutorial.installationGuide')}
               </a>
             </div>
           </div>
@@ -197,7 +199,7 @@ export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialo
           <DialogTitle className="flex items-center gap-3">
             <span>{currentStepData.title}</span>
             <Badge variant="secondary" className="text-xs">
-              {currentStep + 1} / {steps.length}
+              {t('tutorial.progress', { current: currentStep + 1, total: steps.length })}
             </Badge>
           </DialogTitle>
           <DialogDescription>{currentStepData.description}</DialogDescription>
@@ -232,7 +234,7 @@ export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialo
             size="sm"
             onClick={handleSkip}
           >
-            Skip Tutorial
+            {t('tutorial.skip')}
           </Button>
           <div className="flex gap-2">
             <Button
@@ -240,10 +242,10 @@ export function TutorialDialog({ open, onOpenChange, onComplete }: TutorialDialo
               onClick={handlePrevious}
               disabled={currentStep === 0}
             >
-              Previous
+              {t('common.previous')}
             </Button>
             <Button onClick={handleNext}>
-              {currentStep === steps.length - 1 ? 'Get Started' : 'Next'}
+              {currentStep === steps.length - 1 ? t('tutorial.getStarted') : t('common.next')}
             </Button>
           </div>
         </DialogFooter>

@@ -22,6 +22,7 @@ export function getStore(): any {
       encryptionKey: 'talktofigma-secure-key-v1', // Use a secure key in production
       defaults: {
         'app.theme': 'system',
+        'app.locale': 'system',
         'app.firstLaunch': true,
         'app.showTutorial': true,
         [STORE_KEYS.ASSISTANT_CONTEXT_LENGTH]: ASSISTANT_CONTEXT_LENGTH.DEFAULT,

@@ -5,6 +5,7 @@ import { useStickToBottomContext } from 'use-stick-to-bottom'
 
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 
 interface ScrollButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   className?: string
@@ -13,6 +14,7 @@ interface ScrollButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement
 }
 
 export function ScrollButton({ className, variant = 'outline', size = 'icon-sm', ...props }: ScrollButtonProps) {
+  const { t } = useTranslation()
   const { isAtBottom, scrollToBottom } = useStickToBottomContext()
 
   return (
@@ -26,7 +28,7 @@ export function ScrollButton({ className, variant = 'outline', size = 'icon-sm',
         className,
       )}
       onClick={() => scrollToBottom()}
-      aria-label="Scroll to latest messages"
+      aria-label={t('accessibility.scrollToLatestMessages')}
       {...props}
     >
       <ChevronDown className="size-4" />

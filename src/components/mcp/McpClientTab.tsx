@@ -13,8 +13,9 @@ import { ConfigStatusBadge } from './ConfigStatusBadge'
 import { ConfigCodeBlock } from './ConfigCodeBlock'
 import type { McpClient } from '@/lib/mcp/client-configs'
 import type { ConfigDetectionResult } from '@/shared/types/ipc'
-import { formatClientConfig } from '@/lib/mcp/client-configs'
+import { formatClientConfig, getClientInstructions } from '@/lib/mcp/client-configs'
 import { useToast } from '@/hooks/use-toast'
+import { useTranslation } from 'react-i18next'
 
 interface McpClientTabProps {
   client: McpClient
@@ -23,9 +24,11 @@ interface McpClientTabProps {
 }
 
 export function McpClientTab({ client, configState, onConfigChange }: McpClientTabProps) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const [isConfiguring, setIsConfiguring] = useState(false)
   const { toast } = useToast()
+  const instructions = getClientInstructions(client, t)
 
   const configJson = formatClientConfig(client)
   const canAutoConfigure = !client.comingSoon && client.configFormat === 'json'
@@ -36,13 +39,13 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
       toast({
-        title: 'Copied!',
-        description: 'Configuration copied to clipboard',
+        title: t('common.copied'),
+        description: t('mcp.copyConfigurationSuccess'),
       })
     } catch (error) {
       toast({
-        title: 'Failed to copy',
-        description: 'Could not copy to clipboard',
+        title: t('mcp.failedToCopy'),
+        description: t('mcp.couldNotCopy'),
         variant: 'destructive',
       })
     }
@@ -55,21 +58,21 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
 
       if (result.success) {
         toast({
-          title: 'Success!',
+          title: t('mcp.successBang'),
           description: result.message,
         })
         onConfigChange()
       } else {
         toast({
-          title: 'Configuration Failed',
+          title: t('mcp.configurationFailed'),
           description: result.error || result.message,
           variant: 'destructive',
         })
       }
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to auto-configure',
+        title: t('common.error'),
+        description: error.message || t('mcp.failedToAutoConfigure'),
         variant: 'destructive',
       })
     } finally {
@@ -82,14 +85,14 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
       const result = await window.electron.mcp.openConfigFolder(client.id)
       if (!result.success) {
         toast({
-          title: 'Failed to open folder',
+          title: t('mcp.failedToOpenFolder'),
           description: result.error,
           variant: 'destructive',
         })
       }
     } catch (error: any) {
       toast({
-        title: 'Error',
+        title: t('common.error'),
         description: error.message,
         variant: 'destructive',
       })
@@ -101,20 +104,20 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
       const result = await window.electron.mcp.restoreBackup(client.id)
       if (result.success) {
         toast({
-          title: 'Backup Restored',
+          title: t('mcp.backupRestored'),
           description: result.message,
         })
         onConfigChange()
       } else {
         toast({
-          title: 'Restore Failed',
+          title: t('mcp.restoreFailed'),
           description: result.error || result.message,
           variant: 'destructive',
         })
       }
     } catch (error: any) {
       toast({
-        title: 'Error',
+        title: t('common.error'),
         description: error.message,
         variant: 'destructive',
       })
@@ -131,8 +134,8 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
             </CardTitle>
             <CardDescription className="mt-2">
               {client.comingSoon
-                ? 'Configuration format is currently being researched'
-                : `Configure ${client.displayName} to use TalkToFigma Desktop`}
+                ? t('mcp.configuringResearch')
+                : t('mcp.configureClient', { client: client.displayName })}
             </CardDescription>
           </div>
           {configState && (
@@ -147,11 +150,11 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
             <div className="flex gap-2">
               <AlertCircle className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium text-sm text-amber-600 dark:text-amber-400">
-                  Coming Soon
+                  <p className="font-medium text-sm text-amber-600 dark:text-amber-400">
+                  {t('mcp.comingSoon')}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Support for {client.displayName} is under development. Check back for updates.
+                  {t('mcp.supportUnderDevelopment', { client: client.displayName })}
                 </p>
               </div>
             </div>
@@ -160,7 +163,8 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
           <>
             {/* Configuration Display */}
             <div>
-              <h4 className="text-sm font-semibold mb-2">Configuration</h4>
+              <h4 className="text-sm font-semibold mb-2">{t('mcp.configuration')}</h4>
+              
               <ConfigCodeBlock config={configJson} />
             </div>
 
@@ -174,12 +178,12 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
                 {copied ? (
                   <>
                     <Check className="mr-2 size-4" />
-                    Copied!
+                    {t('common.copied')}
                   </>
                 ) : (
                   <>
                     <Copy className="mr-2 size-4" />
-                    Copy
+                    {t('common.copy')}
                   </>
                 )}
               </Button>
@@ -191,7 +195,7 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
                   size="sm"
                 >
                   <Zap className="mr-2 size-4" />
-                  {isConfiguring ? 'Configuring...' : 'Auto-Configure'}
+                  {isConfiguring ? t('common.checking') : t('mcp.autoConfigure')}
                 </Button>
               )}
 
@@ -202,7 +206,7 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
                   size="sm"
                 >
                   <FolderOpen className="mr-2 size-4" />
-                  Open Folder
+                  {t('mcp.openFolder')}
                 </Button>
               )}
 
@@ -213,7 +217,7 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
                   size="sm"
                 >
                   <RotateCcw className="mr-2 size-4" />
-                  Restore Backup
+                  {t('mcp.restoreBackup')}
                 </Button>
               )}
             </div>
@@ -222,9 +226,9 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
 
             {/* Instructions */}
             <div>
-              <h4 className="text-sm font-semibold mb-2">Instructions</h4>
+              <h4 className="text-sm font-semibold mb-2">{t('mcp.instructions')}</h4>
               <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
-                {client.instructions.map((instruction, index) => (
+                {instructions.map((instruction, index) => (
                   <li key={index}>{instruction}</li>
                 ))}
               </ol>
@@ -233,7 +237,7 @@ export function McpClientTab({ client, configState, onConfigChange }: McpClientT
             {/* Config Path */}
             {client.configPath && (
               <div className="text-xs text-muted-foreground">
-                <strong>Config Location:</strong> {client.configPath}
+                <strong>{t('mcp.configLocation')}:</strong> {client.configPath}
               </div>
             )}
           </>

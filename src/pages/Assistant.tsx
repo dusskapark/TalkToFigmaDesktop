@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Check, ChevronDown, Copy, Loader2, Paperclip, Plus, RefreshCw, SendHorizontal, Shield, Terminal, ThumbsDown, ThumbsUp, Trash2, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -221,16 +222,17 @@ function buildReasoningText(
   liveToolEvents: LiveToolEvent[],
   waitingApproval: boolean,
   approvalRequest: ToolApprovalRequest | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
   const lines: string[] = []
-  lines.push('Runtime reasoning trace')
+  lines.push(t('assistant.runtimeReasoningTrace'))
 
   if (waitingApproval && approvalRequest) {
-    lines.push(`- Awaiting approval for: ${approvalRequest.toolName}`)
+    lines.push(`- ${t('assistant.awaitingApprovalFor', { toolName: approvalRequest.toolName })}`)
   }
 
   if (liveToolEvents.length === 0) {
-    lines.push('- No tool events yet. Preparing execution.')
+    lines.push(`- ${t('assistant.noToolEventsYet')}`)
     return lines.join('\n')
   }
 
@@ -238,21 +240,21 @@ function buildReasoningText(
     const name = toToolDisplayName(event.toolType)
     const status =
       event.state === 'output-available'
-        ? 'completed'
+        ? t('assistant.statusCompleted')
         : event.state === 'output-error'
-          ? 'failed'
+          ? t('assistant.statusFailed')
           : event.state === 'input-available'
-            ? 'queued'
-            : 'running'
+            ? t('assistant.statusQueued')
+            : t('assistant.statusRunning')
 
     const inputPreview = toCompactValue(event.input)
     const outputPreview = event.state === 'output-available' ? toCompactValue(event.output) : ''
     const errorPreview = event.state === 'output-error' ? event.errorText ?? toCompactValue(event.output) : ''
 
     lines.push(`- ${name}: ${status}`)
-    if (inputPreview) lines.push(`  input: ${inputPreview}`)
-    if (outputPreview) lines.push(`  output: ${outputPreview}`)
-    if (errorPreview) lines.push(`  error: ${errorPreview}`)
+    if (inputPreview) lines.push(`  ${t('assistant.inputLabel')}: ${inputPreview}`)
+    if (outputPreview) lines.push(`  ${t('assistant.outputLabel')}: ${outputPreview}`)
+    if (errorPreview) lines.push(`  ${t('assistant.errorLabel')}: ${errorPreview}`)
   }
 
   return lines.join('\n')
@@ -493,6 +495,7 @@ function toRenderableItems(messages: AssistantMessage[], liveToolEvents: LiveToo
 }
 
 export function AssistantPage() {
+  const { t } = useTranslation()
   const [runtimeStatus, setRuntimeStatus] = useState<AssistantRuntimeStatus | null>(null)
   const [threads, setThreads] = useState<AssistantThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
@@ -552,8 +555,8 @@ export function AssistantPage() {
   const isRuntimeUnavailable = Boolean(runtimeStatus?.modelInstalled && runtimeStatus.runtimeBinaryReady === false)
   const runtimeIssueMessage = isRuntimeUnavailable
     ? (runtimeStatus?.error ?? (runtimeStatus?.backend === 'ollama'
-      ? 'Ollama is not reachable. Start Ollama, then refresh models.'
-      : 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.'))
+      ? t('assistant.runtimeUnavailableOllama')
+      : t('assistant.runtimeUnavailableEmbedded')))
     : null
   const isComposerDisabled = !activeThreadId || appState === 'needs-model' || isModelDownloading || isRuntimeUnavailable
   const isSendDisabled = isComposerDisabled || !!runId || isSending
@@ -567,7 +570,7 @@ export function AssistantPage() {
     ?? runtimeStatus?.recommendedModel.id
     ?? 'gemma4:e4b'
   const runtimeBackendLabel = runtimeStatus?.backend === 'ollama' ? 'Ollama' : 'Embedded'
-  const runtimeBackendDescription = `Choose an available ${runtimeBackendLabel.toLowerCase()} model for this thread.`
+  const runtimeBackendDescription = t('assistant.chooseModelForThread', { runtime: runtimeBackendLabel.toLowerCase() })
   const activeModelDisplayLabel = `${runtimeBackendLabel} · ${activeModelLabel}`
   const quickSwitchModels = useMemo(() => {
     if (installedModels.length <= MAX_PROMPT_INPUT_MODEL_OPTIONS) {
@@ -584,10 +587,12 @@ export function AssistantPage() {
   const selectableModels = installedModels
   const canSend = !isSendDisabled && (input.trim().length > 0 || draftAttachments.length > 0)
   const shouldShowPreResponseShimmer = Boolean((runId || isSending) && !streamingText.trim())
-  const permissionModeLabel = permissionMode === 'run-everything' ? 'Run everything' : 'Ask every time'
+  const permissionModeLabel = permissionMode === 'run-everything'
+    ? t('assistant.permissionRunEverything')
+    : t('assistant.permissionAskEveryTime')
   const reasoningText = useMemo(
-    () => buildReasoningText(liveToolEvents, waitingApproval, approvalRequest),
-    [liveToolEvents, waitingApproval, approvalRequest],
+    () => buildReasoningText(liveToolEvents, waitingApproval, approvalRequest, t),
+    [approvalRequest, liveToolEvents, t, waitingApproval],
   )
   const recommendedModel = runtimeStatus?.recommendedModel
   const recommendedTotalBytes = (recommendedModel?.modelSizeBytes ?? 0) + (recommendedModel?.mmprojSizeBytes ?? 0)
@@ -785,7 +790,7 @@ export function AssistantPage() {
         setApprovalRequest(null)
 
         if (event.finishReason === 'error') {
-          setError(event.error ?? 'Assistant run failed')
+          setError(event.error ?? t('assistant.assistantRunFailed'))
         }
 
         if (activeThreadId) {
@@ -803,7 +808,7 @@ export function AssistantPage() {
           if (!result.success) {
             setApprovalRequest(request)
             setWaitingApproval(true)
-            setError(result.error ?? 'Auto-approval failed. Please approve manually.')
+            setError(result.error ?? t('assistant.autoApprovalFailed'))
           }
         })
         return
@@ -888,7 +893,7 @@ export function AssistantPage() {
     const target = threads.find((thread) => thread.id === threadId)
     if (!target || deletingThreadId) return
 
-    const confirmed = window.confirm(`Delete thread "${target.title}"? This action cannot be undone.`)
+    const confirmed = window.confirm(t('assistant.deleteThreadConfirm', { title: target.title }))
     if (!confirmed) return
 
     setError(null)
@@ -896,7 +901,7 @@ export function AssistantPage() {
     try {
       const result = await window.electron.assistant.deleteThread(threadId)
       if (!result.success) {
-        setError(result.error ?? 'Failed to delete thread')
+        setError(result.error ?? t('assistant.failedToDeleteThread'))
         return
       }
 
@@ -924,7 +929,7 @@ export function AssistantPage() {
       return
     }
     if (isRuntimeUnavailable) {
-      setError(runtimeIssueMessage ?? 'Bundled llama-server runtime is missing.')
+      setError(runtimeIssueMessage ?? t('assistant.runtimeUnavailableEmbedded'))
       return
     }
 
@@ -964,10 +969,10 @@ export function AssistantPage() {
           openSetupDialog(false)
         } else if (isErrorCode(result.error, 'RUNTIME_BINARY_MISSING') || isErrorCode(result.error, 'OLLAMA_UNAVAILABLE')) {
           setError(runtimeIssueMessage ?? (runtimeStatus?.backend === 'ollama'
-            ? 'Ollama is not reachable. Start Ollama, then refresh models.'
-            : 'Bundled llama-server runtime is missing. Reinstall the app or rebuild the package.'))
+            ? t('assistant.runtimeUnavailableOllama')
+            : t('assistant.runtimeUnavailableEmbedded')))
         } else {
-          setError(result.error ?? 'Failed to send message')
+          setError(result.error ?? t('assistant.failedToSendMessage'))
         }
 
         setMessages((previous) => previous.filter((message) => message.id !== userMessage.id))
@@ -1022,7 +1027,7 @@ export function AssistantPage() {
     }
 
     if (hasFailedAttachment) {
-      setError('Some files could not be attached. Please try again.')
+      setError(t('assistant.failedToAttachFiles'))
     }
   }
 
@@ -1039,7 +1044,7 @@ export function AssistantPage() {
     try {
       const result = await window.electron.assistant.setActiveModel(activeThreadId, model)
       if (!result.success) {
-        setError(result.error ?? 'Failed to set active model')
+        setError(result.error ?? t('assistant.failedToSetActiveModel'))
         return
       }
 
@@ -1061,7 +1066,7 @@ export function AssistantPage() {
 
     const result = await window.electron.assistant.setActiveModel(activeThreadId, selectedModel)
     if (!result.success) {
-      setError(result.error ?? 'Failed to set active model')
+      setError(result.error ?? t('assistant.failedToSetActiveModel'))
       return
     }
 
@@ -1094,7 +1099,7 @@ export function AssistantPage() {
     try {
       const result = await window.electron.assistant.downloadModel(runtimeStatus.recommendedModel.id)
       if (!result.success) {
-        setError(result.error ?? 'Model download failed. Please retry.')
+        setError(result.error ?? t('assistant.modelDownloadFailedRetry'))
       }
       await refreshRuntimeStatus(activeThreadId ?? undefined)
       await refreshThreads()
@@ -1161,7 +1166,7 @@ export function AssistantPage() {
               <ChatContainerContent className="space-y-6 px-4 pt-8 pb-4">
                 {renderableItems.length === 0 ? (
                   <div className="text-muted-foreground mx-auto flex min-h-[280px] w-full max-w-4xl items-center justify-center rounded-xl border border-dashed text-sm">
-                    Start a conversation with your local assistant.
+                    {t('assistant.emptyState')}
                   </div>
                 ) : (
                   renderableItems.map((item) => {
@@ -1195,12 +1200,12 @@ export function AssistantPage() {
                                     item.id === lastAssistantMessageId && 'opacity-100',
                                   )}
                                 >
-                                  <MessageAction tooltip={copiedMessageId === item.id ? 'Copied' : 'Copy'}>
+                                  <MessageAction tooltip={copiedMessageId === item.id ? t('assistant.copied') : t('common.copy')}>
                                     <Button
                                       variant="ghost"
                                       size="icon-sm"
                                       className="rounded-full"
-                                      aria-label="Copy assistant message"
+                                      aria-label={t('assistant.copyAssistantMessage')}
                                       onClick={() => void handleCopyAssistantMessage(item.id, item.text)}
                                     >
                                       {copiedMessageId === item.id ? (
@@ -1210,7 +1215,7 @@ export function AssistantPage() {
                                       )}
                                     </Button>
                                   </MessageAction>
-                                  <MessageAction tooltip="Helpful">
+                                  <MessageAction tooltip={t('assistant.helpful')}>
                                     <Button
                                       variant="ghost"
                                       size="icon-sm"
@@ -1218,14 +1223,14 @@ export function AssistantPage() {
                                         'rounded-full',
                                         assistantFeedbackByMessageId[item.id] === 'up' && 'bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20',
                                       )}
-                                      aria-label="Mark assistant response as helpful"
+                                      aria-label={t('assistant.markHelpful')}
                                       aria-pressed={assistantFeedbackByMessageId[item.id] === 'up'}
                                       onClick={() => handleAssistantFeedback(item.id, 'up')}
                                     >
                                       <ThumbsUp className="size-3.5" />
                                     </Button>
                                   </MessageAction>
-                                  <MessageAction tooltip="Not helpful">
+                                  <MessageAction tooltip={t('assistant.notHelpful')}>
                                     <Button
                                       variant="ghost"
                                       size="icon-sm"
@@ -1234,7 +1239,7 @@ export function AssistantPage() {
                                         assistantFeedbackByMessageId[item.id] === 'down'
                                           && 'bg-rose-500/10 text-rose-700 hover:bg-rose-500/20',
                                       )}
-                                      aria-label="Mark assistant response as not helpful"
+                                      aria-label={t('assistant.markNotHelpful')}
                                       aria-pressed={assistantFeedbackByMessageId[item.id] === 'down'}
                                       onClick={() => handleAssistantFeedback(item.id, 'down')}
                                     >
@@ -1252,7 +1257,7 @@ export function AssistantPage() {
                           {attachments.length > 0 ? (
                             <div className="max-w-[85%] rounded-2xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary sm:max-w-[75%]">
                               <p className="font-medium">
-                                {attachments.length === 1 ? '1 attachment' : `${attachments.length} attachments`}
+                                {t('assistant.attachmentCount', { count: attachments.length })}
                               </p>
                               <p className="mt-0.5 truncate font-mono text-[11px]">
                                 {attachmentSummary}
@@ -1286,8 +1291,8 @@ export function AssistantPage() {
                   <div className="mx-auto w-full max-w-4xl px-0 py-1 md:px-6">
                     <Reasoning open={reasoningOpen} onOpenChange={setReasoningOpen} isStreaming={showPreResponseShimmer}>
                       <ThinkingBar
-                        text={waitingApproval ? 'Waiting for approval' : 'Deep reasoning in progress'}
-                        stopLabel="Skip thinking"
+                        text={waitingApproval ? t('assistant.waitingForApproval') : t('assistant.deepReasoningInProgress')}
+                        stopLabel={t('assistant.skipThinking')}
                         onStop={() => void handleStopThinking()}
                         onClick={() => setReasoningOpen((open) => !open)}
                       />
@@ -1342,7 +1347,7 @@ export function AssistantPage() {
                           type="button"
                           className="text-muted-foreground hover:text-foreground inline-flex items-center"
                           onClick={() => handleRemoveAttachment(attachment.id)}
-                          aria-label={`Remove ${attachment.name}`}
+                          aria-label={t('assistant.removeAttachment', { name: attachment.name })}
                         >
                           <X className="size-3.5" />
                         </button>
@@ -1351,7 +1356,7 @@ export function AssistantPage() {
                   </div>
                 ) : null}
 
-                <PromptInputTextarea placeholder="Ask anything about your design..." />
+                <PromptInputTextarea placeholder={t('assistant.composerPlaceholder')} />
                 <PromptInputActions className="items-center">
                   <PromptInputAction className="gap-1">
                     <Button
@@ -1384,7 +1389,7 @@ export function AssistantPage() {
                             disabled
                             className="text-muted-foreground cursor-default font-mono text-[11px]"
                           >
-                            No installed models
+                            {t('assistant.noInstalledModels')}
                           </DropdownMenuItem>
                         ) : (
                           quickSwitchModels.map((model) => (
@@ -1403,7 +1408,7 @@ export function AssistantPage() {
                             setModelDialogOpen(true)
                           }}
                         >
-                          {hasMoreModels ? 'See all models...' : 'Manage models...'}
+                          {hasMoreModels ? t('assistant.seeAllModels') : t('assistant.manageModels')}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1424,18 +1429,18 @@ export function AssistantPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="min-w-[200px]">
                         <DropdownMenuItem onSelect={() => void handlePermissionModeChange('run-everything')}>
-                          Run Everything
+                          {t('assistant.permissionRunEverything')}
                           {permissionMode === 'run-everything' ? <Check className="ml-auto size-3.5" /> : null}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => void handlePermissionModeChange('ask-every-time')}>
-                          Ask Every Time
+                          {t('assistant.permissionAskEveryTime')}
                           {permissionMode === 'ask-every-time' ? <Check className="ml-auto size-3.5" /> : null}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </PromptInputAction>
 
-                  <PromptInputAction className="ml-auto" tooltip="Send">
+                  <PromptInputAction className="ml-auto" tooltip={t('common.send')}>
                     <Button type="submit" size="icon" className="size-9 rounded-full" disabled={!canSend}>
                       <SendHorizontal className="size-4" />
                     </Button>
@@ -1450,16 +1455,16 @@ export function AssistantPage() {
       <Sheet open={threadDrawerOpen} onOpenChange={setThreadDrawerOpen}>
         <SheetContent side="left" className="w-[360px] sm:max-w-[360px]">
           <SheetHeader className="pb-2">
-            <SheetTitle>Assistant Threads</SheetTitle>
+            <SheetTitle>{t('assistant.threadDrawerTitle')}</SheetTitle>
             <SheetDescription>
-              {threads.length} thread{threads.length === 1 ? '' : 's'} · {runtimeBackendLabel} runtime
+              {t('assistant.threadDrawerDescription', { count: threads.length, runtime: runtimeBackendLabel })}
             </SheetDescription>
           </SheetHeader>
 
           <div className="flex flex-1 min-h-0 flex-col px-4 pb-4">
             <Button size="sm" onClick={() => void handleCreateThread()}>
               <Plus className="size-4" />
-              New Chat
+              {t('assistant.newChat')}
             </Button>
 
             <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
@@ -1481,7 +1486,7 @@ export function AssistantPage() {
                     <p className="text-muted-foreground mt-0.5 text-xs">
                       {thread.activeModel && installedModels.includes(thread.activeModel)
                         ? thread.activeModel
-                        : 'Model unavailable'}
+                        : t('assistant.modelUnavailable')}
                     </p>
                   </button>
                   <button
@@ -1489,8 +1494,8 @@ export function AssistantPage() {
                     className="text-muted-foreground hover:text-destructive inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors"
                     onClick={() => void handleDeleteThread(thread.id)}
                     disabled={deletingThreadId === thread.id}
-                    aria-label={`Delete ${thread.title}`}
-                    title="Delete thread"
+                    aria-label={t('assistant.deleteNamedThread', { name: thread.title })}
+                    title={t('assistant.deleteThread')}
                   >
                     {deletingThreadId === thread.id ? (
                       <Loader2 className="size-3.5 animate-spin" />
@@ -1520,18 +1525,18 @@ export function AssistantPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{runtimeStatus?.backend === 'ollama' ? 'Ollama Setup' : 'Model Wizard'}</DialogTitle>
+            <DialogTitle>{runtimeStatus?.backend === 'ollama' ? t('assistant.setupOllamaTitle') : t('assistant.modelWizardTitle')}</DialogTitle>
             <DialogDescription>
               {runtimeStatus?.backend === 'ollama'
-                ? 'Start Ollama and pull a model before using Assistant with the Ollama runtime.'
-                : 'Download the recommended model first. Assistant stays locked until installation is completed.'}
+                ? t('assistant.setupOllamaDescription')
+                : t('assistant.setupEmbeddedDescription')}
             </DialogDescription>
           </DialogHeader>
           {runtimeStatus?.backend === 'ollama' ? (
             <div className="space-y-3 text-sm">
               <div className="rounded-md border p-3">
-                <p className="text-muted-foreground text-xs">Ollama daemon</p>
-                <p className="font-medium">{runtimeStatus?.daemonReachable ? 'Reachable' : 'Not reachable'}</p>
+                <p className="text-muted-foreground text-xs">{t('settings.model.ollamaDaemon')}</p>
+                <p className="font-medium">{runtimeStatus?.daemonReachable ? t('assistant.daemonReachable') : t('assistant.daemonNotReachable')}</p>
                 <p className="text-muted-foreground mt-1 text-xs">{runtimeStatus?.baseUrl ?? 'http://127.0.0.1:11434'}</p>
                 {runtimeStatus?.error ? (
                   <p className="text-destructive mt-2 text-xs">{runtimeStatus.error}</p>
@@ -1541,9 +1546,9 @@ export function AssistantPage() {
                 <div className="flex items-start gap-2">
                   <Terminal className="text-muted-foreground mt-0.5 size-4" />
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium">Pull a model</p>
+                    <p className="font-medium">{t('assistant.pullModelTitle')}</p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      Run this in Terminal, then recheck models.
+                      {t('assistant.runInTerminalThenRecheck')}
                     </p>
                     <code className="mt-2 block rounded-md bg-muted px-2 py-1 text-xs">
                       ollama pull gemma4:e4b
@@ -1564,7 +1569,7 @@ export function AssistantPage() {
           ) : (
           <div className="space-y-3 text-sm">
             <div className="rounded-md border p-3">
-              <p className="text-muted-foreground text-xs">Recommended model</p>
+              <p className="text-muted-foreground text-xs">{t('settings.model.recommendedModel')}</p>
               <p className="font-medium">{recommendedModel?.displayName ?? 'gemma4:e4b'}</p>
               <p className="text-muted-foreground mt-1 text-xs">
                 {recommendedModel?.id ?? 'gemma4:e4b'} · {formatBytes(recommendedTotalBytes)}
@@ -1572,7 +1577,7 @@ export function AssistantPage() {
             </div>
 
             <div className="rounded-md border p-3">
-              <p className="font-medium">Install status</p>
+              <p className="font-medium">{t('assistant.installStatus')}</p>
               <p className="text-muted-foreground mt-1 text-xs capitalize">
                 {runtimeStatus?.downloadState ?? 'idle'}
               </p>
@@ -1598,12 +1603,12 @@ export function AssistantPage() {
           <DialogFooter>
             {runtimeStatus?.modelInstalled ? (
               <Button variant="outline" onClick={closeSetupDialog}>
-                Close
+                {t('common.close')}
               </Button>
             ) : runtimeStatus?.backend === 'ollama' ? (
               <Button variant="outline" onClick={() => void handleRecheckModels()} disabled={isRecheckingModels}>
                 {isRecheckingModels ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                {isRecheckingModels ? 'Checking...' : 'Recheck Models'}
+                {isRecheckingModels ? t('common.checking') : t('assistant.recheckModels')}
               </Button>
             ) : (
               <Button
@@ -1614,10 +1619,10 @@ export function AssistantPage() {
                   ? <Loader2 className="size-4 animate-spin" />
                   : null}
                 {runtimeStatus?.downloadState === 'failed'
-                  ? 'Retry Download'
+                  ? t('settings.model.retryDownload')
                   : runtimeStatus?.downloadState === 'downloading' || runtimeStatus?.downloadState === 'verifying'
-                    ? 'Downloading...'
-                    : 'Download Recommended Model'}
+                    ? t('assistant.downloading')
+                    : t('assistant.downloadRecommendedModel')}
               </Button>
             )}
           </DialogFooter>
@@ -1630,7 +1635,7 @@ export function AssistantPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Select a model</DialogTitle>
+            <DialogTitle>{t('assistant.selectModelTitle')}</DialogTitle>
             <DialogDescription>
               {runtimeBackendDescription}
             </DialogDescription>
@@ -1652,18 +1657,18 @@ export function AssistantPage() {
             {installedModels.length === 0 ? (
               <p className="text-muted-foreground text-sm">
                 {runtimeStatus?.backend === 'ollama'
-                  ? 'No Ollama models found. Pull a model in Terminal, then recheck.'
-                  : 'No model is installed. Use Model Wizard first, then return.'}
+                  ? t('assistant.noOllamaModelsFoundDescription')
+                  : t('assistant.noEmbeddedModelsFoundDescription')}
               </p>
             ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => void handleRecheckModels()} disabled={isRecheckingModels}>
               {isRecheckingModels ? <Loader2 className="size-4 animate-spin" /> : null}
-              {isRecheckingModels ? 'Checking...' : 'Recheck'}
+              {isRecheckingModels ? t('common.checking') : t('common.recheck')}
             </Button>
             <Button onClick={() => void handleApplyModel()} disabled={!selectedModel || !activeThreadId || isRecheckingModels || selectableModels.length === 0}>
-              Use Selected Model
+              {t('assistant.useSelectedModel')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1672,18 +1677,18 @@ export function AssistantPage() {
       <Dialog open={!!approvalRequest} onOpenChange={() => void 0}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Approve Design Change</DialogTitle>
+            <DialogTitle>{t('assistant.approvalTitle')}</DialogTitle>
             <DialogDescription>
-              This tool can modify your Figma file. Approve to continue.
+              {t('assistant.approvalDescription')}
             </DialogDescription>
           </DialogHeader>
           {approvalRequest ? (
             <div className="space-y-2 rounded-md border p-3 text-sm">
               <p>
-                <b>Tool:</b> {approvalRequest.toolName}
+                <b>{t('assistant.toolLabel')}:</b> {approvalRequest.toolName}
               </p>
               <p>
-                <b>Safety:</b> {approvalRequest.safety}
+                <b>{t('assistant.safetyLabel')}:</b> {approvalRequest.safety}
               </p>
               <pre className="bg-muted max-h-40 overflow-auto rounded p-2 text-xs">
                 {JSON.stringify(approvalRequest.args, null, 2)}
@@ -1692,9 +1697,9 @@ export function AssistantPage() {
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => void handleApproval(false)}>
-              Reject
+              {t('common.reject')}
             </Button>
-            <Button onClick={() => void handleApproval(true)}>Approve</Button>
+            <Button onClick={() => void handleApproval(true)}>{t('common.approve')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

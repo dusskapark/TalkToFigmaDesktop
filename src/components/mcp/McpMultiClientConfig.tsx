@@ -12,9 +12,11 @@ import {
 } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { McpClientItem } from './McpClientItem'
-import { MCP_CLIENTS, getAllClientIds, getComingSoonClient } from '@/lib/mcp/client-configs'
+import { MCP_CLIENTS, getAllClientIds, getClientDescription, getClientInstructions, getComingSoonClient } from '@/lib/mcp/client-configs'
+import { useTranslation } from 'react-i18next'
 
 export function McpMultiClientConfig() {
+  const { t } = useTranslation()
   const comingSoonClient = getComingSoonClient()
 
   return (
@@ -27,10 +29,10 @@ export function McpMultiClientConfig() {
             <AccordionItem key={clientId} value={clientId}>
               <AccordionTrigger className="hover:no-underline">
                 <div className="flex items-center gap-3">
-                  <span className="font-medium">{client?.displayName}</span>
+                    <span className="font-medium">{client?.displayName}</span>
                   {client?.description && (
                     <span className="text-sm text-muted-foreground hidden sm:inline">
-                      {client.description}
+                      {getClientDescription(client, t)}
                     </span>
                   )}
                 </div>
@@ -49,17 +51,17 @@ export function McpMultiClientConfig() {
               <div className="flex items-center gap-3">
                 <span className="font-medium">{comingSoonClient.displayName}</span>
                 <Badge variant="outline" className="text-xs">
-                  Coming Soon
+                  {t('mcp.comingSoon')}
                 </Badge>
               </div>
             </AccordionTrigger>
             <AccordionContent>
               <div className="space-y-3 px-1">
                 <p className="text-sm text-muted-foreground">
-                  {comingSoonClient.description}
+                  {getClientDescription(comingSoonClient, t)}
                 </p>
                 <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-                  {comingSoonClient.instructions.map((instruction, index) => (
+                  {getClientInstructions(comingSoonClient, t).map((instruction, index) => (
                     <li key={index}>{instruction}</li>
                   ))}
                 </ul>

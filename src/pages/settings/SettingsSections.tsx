@@ -7,10 +7,14 @@ import { McpMultiClientConfig } from '@/components/mcp'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import type { AssistantRuntimeBackend, AssistantRuntimeStatus } from '@/shared/types'
 import { ASSISTANT_CONTEXT_LENGTH, ASSISTANT_TOOL_RESULT_LIMITS } from '@/shared/constants'
+import { APP_LOCALE_OPTIONS, AppLocale, localeLabels } from '@/shared/i18n'
 import { formatBytes, formatContextLength, formatEta } from './utils'
+import { useLocale } from '@/components/LocaleProvider'
+import { useTranslation } from 'react-i18next'
 
 interface ModelSettingsSectionProps {
   runtimeStatus: AssistantRuntimeStatus | null
@@ -32,6 +36,34 @@ interface ModelSettingsSectionProps {
   onDeleteModel: (modelId: string) => void
 }
 
+export function LanguageSettingsSection() {
+  const { t } = useTranslation()
+  const { locale, setLocale } = useLocale()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('settings.language.title')}</CardTitle>
+        <CardDescription>{t('settings.language.description')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Select value={locale} onValueChange={(value) => void setLocale(value as AppLocale)}>
+          <SelectTrigger className="w-full sm:w-[240px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {APP_LOCALE_OPTIONS.map((option: AppLocale) => (
+              <SelectItem key={option} value={option}>
+                {option === 'system' ? t('settings.language.systemDefault') : localeLabels[option]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function ModelSettingsSection({
   runtimeStatus,
   displayName,
@@ -51,6 +83,7 @@ export function ModelSettingsSection({
   onActivateModel,
   onDeleteModel,
 }: ModelSettingsSectionProps) {
+  const { t } = useTranslation()
   const [showUploadPanel, setShowUploadPanel] = useState(false)
   const recommendedModel = runtimeStatus?.recommendedModel
   const recommendedSizeBytes = (recommendedModel?.modelSizeBytes ?? 0) + (recommendedModel?.mmprojSizeBytes ?? 0)
@@ -69,21 +102,21 @@ export function ModelSettingsSection({
   const ollamaPullModel = sortedInstalledModels[0]?.id ?? recommendedModel?.id ?? 'gemma4:e4b'
   const runtimeStatusLabel = isOllama
     ? runtimeStatus?.daemonReachable
-      ? runtimeStatus.modelInstalled ? 'Ready' : 'No models'
-      : 'Daemon offline'
+      ? runtimeStatus.modelInstalled ? t('settings.model.ready') : t('settings.model.noModels')
+      : t('settings.model.daemonOffline')
     : runtimeBinaryReady
-      ? 'Ready'
-      : 'Missing runtime'
+      ? t('settings.model.ready')
+      : t('settings.model.missingRuntime')
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Cpu className="size-5" />
-          Model
+          {t('settings.model.title')}
         </CardTitle>
         <CardDescription>
-          Choose how Assistant runs local models, then select the active model for new requests.
+          {t('settings.model.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -99,11 +132,11 @@ export function ModelSettingsSection({
             <div className="flex items-center justify-between gap-2">
               <p className="font-medium">Embedded</p>
               <span className="rounded-md border bg-background px-2 py-0.5 text-[11px]">
-                {backend === 'embedded' ? runtimeStatusLabel : 'Bundled'}
+                {backend === 'embedded' ? runtimeStatusLabel : t('settings.model.bundled')}
               </span>
             </div>
             <p className="text-muted-foreground mt-1 text-xs">
-              Bundled llama-server with downloaded or uploaded GGUF models.
+              {t('settings.model.embeddedDescription')}
             </p>
           </button>
           <button
@@ -117,11 +150,11 @@ export function ModelSettingsSection({
             <div className="flex items-center justify-between gap-2">
               <p className="font-medium">Ollama</p>
               <span className="rounded-md border bg-background px-2 py-0.5 text-[11px]">
-                {backend === 'ollama' ? runtimeStatusLabel : 'External'}
+                {backend === 'ollama' ? runtimeStatusLabel : t('settings.model.external')}
               </span>
             </div>
             <p className="text-muted-foreground mt-1 text-xs">
-              Connect to the local Ollama daemon and use models pulled by Ollama.
+              {t('settings.model.connectOllama')}
             </p>
           </button>
         </div>
@@ -130,14 +163,14 @@ export function ModelSettingsSection({
           <div className="rounded-lg border p-3 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-medium">Ollama daemon</p>
+                <p className="font-medium">{t('settings.model.ollamaDaemon')}</p>
                 <p className="text-muted-foreground text-xs">
                   {runtimeStatus?.baseUrl ?? 'http://127.0.0.1:11434'}
                 </p>
               </div>
               <Button variant="outline" onClick={onRefreshModelStatus} disabled={isWorking}>
                 <RefreshCw className="size-4" />
-                Refresh
+                {t('common.refresh')}
               </Button>
             </div>
 
@@ -150,9 +183,9 @@ export function ModelSettingsSection({
                 <div className="flex items-start gap-2">
                   <Terminal className="text-muted-foreground mt-0.5 size-4" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">Pull a model with Ollama</p>
+                    <p className="text-sm font-medium">{t('settings.model.pullModel')}</p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                      Install or start Ollama, then run this command and refresh.
+                      {t('settings.model.pullModelDescription')}
                     </p>
                     <code className="mt-2 block rounded-md bg-background px-2 py-1 text-xs">
                       ollama pull {ollamaPullModel}
@@ -182,10 +215,10 @@ export function ModelSettingsSection({
         ) : null}
 
         <div className="rounded-lg border p-3 space-y-2">
-          <p className="font-medium">{isOllama ? 'Ollama models' : 'Installed models'}</p>
+          <p className="font-medium">{isOllama ? t('settings.model.ollamaModels') : t('settings.model.installedModels')}</p>
           {sortedInstalledModels.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              {isOllama ? 'No Ollama models found.' : 'No installed models yet.'}
+              {isOllama ? t('settings.model.noOllamaModelsFound') : t('settings.model.noInstalledModelsYet')}
             </p>
           ) : (
             sortedInstalledModels.map((model) => {
@@ -206,14 +239,16 @@ export function ModelSettingsSection({
                         onClick={() => onActivateModel(model.id)}
                         disabled={isWorking || isActive}
                       >
-                        {isActive ? 'Active' : 'Activate'}
+                        {isActive ? t('settings.model.active') : t('settings.model.activate')}
                       </Button>
                       <Button
                         size="icon"
                         variant="ghost"
                         onClick={() => onDeleteModel(model.id)}
                         disabled={isWorking || isOllama}
-                        aria-label={isOllama ? `Manage ${model.displayName} with Ollama` : `Delete ${model.displayName}`}
+                        aria-label={isOllama
+                          ? t('settings.model.manageWithOllama', { model: model.displayName })
+                          : t('settings.model.deleteModel', { model: model.displayName })}
                       >
                         <Trash2 className="size-4" />
                       </Button>
@@ -270,18 +305,19 @@ function EmbeddedRecommendedModelCard({
   onDownloadRecommendedModel: () => void
   onRefreshModelStatus: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="rounded-lg border p-3 space-y-2">
-      <p className="font-medium">Recommended model</p>
+      <p className="font-medium">{t('settings.model.recommendedModel')}</p>
       <p className="text-sm">{recommendedModel?.displayName ?? 'gemma4:e4b'}</p>
       <p className="text-muted-foreground text-xs">
         {recommendedModel?.id ?? 'gemma4:e4b'} · {formatBytes(recommendedSizeBytes)}
       </p>
       <p className="text-muted-foreground text-xs capitalize">
-        Download state: {runtimeStatus?.downloadState ?? 'idle'}
+        {t('settings.model.downloadState', { state: runtimeStatus?.downloadState ?? 'idle' })}
       </p>
       <p className="text-muted-foreground text-xs">
-        Runtime: {runtimeBinaryReady ? 'Ready' : 'Missing'}
+        {t('settings.model.runtimeStatus', { status: runtimeBinaryReady ? t('settings.model.ready') : t('settings.model.missingRuntime') })}
         {runtimeStatus?.runtimeBinarySource ? ` (${runtimeStatus.runtimeBinarySource})` : ''}
       </p>
       {runtimeBinaryPath ? (
@@ -309,10 +345,10 @@ function EmbeddedRecommendedModelCard({
       <div className="flex items-center gap-2 pt-1">
         <Button onClick={onDownloadRecommendedModel} disabled={isWorking || isDownloading}>
           {isWorking || isDownloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-          {runtimeStatus?.downloadState === 'failed' ? 'Retry Download' : 'Download Recommended'}
+          {runtimeStatus?.downloadState === 'failed' ? t('settings.model.retryDownload') : t('settings.model.downloadRecommended')}
         </Button>
         <Button variant="outline" onClick={onRefreshModelStatus} disabled={isWorking}>
-          Refresh
+          {t('common.refresh')}
         </Button>
       </div>
     </div>
@@ -346,18 +382,19 @@ function EmbeddedUploadSection({
   onDisplayNameChange: (value: string) => void
   onUploadModel: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="border-t pt-3 mt-3 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="font-medium text-sm">Add custom GGUF model</p>
+          <p className="font-medium text-sm">{t('settings.model.addCustomModel')}</p>
           <p className="text-muted-foreground text-xs">
-            Upload a model only when you want to add something beyond the recommended setup.
+            {t('settings.model.addCustomModelDescription')}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={onToggle} disabled={isWorking}>
           <ChevronDown className={`size-4 transition-transform ${showUploadPanel ? 'rotate-180' : ''}`} />
-          {showUploadPanel ? 'Hide' : 'Open'}
+          {showUploadPanel ? t('common.hide') : t('common.open')}
         </Button>
       </div>
 
@@ -366,26 +403,26 @@ function EmbeddedUploadSection({
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => ggufInputRef.current?.click()} disabled={isWorking}>
               <Upload className="size-4" />
-              Select GGUF
+              {t('settings.model.selectGguf')}
             </Button>
             <Button variant="outline" onClick={() => mmprojInputRef.current?.click()} disabled={isWorking}>
               <Upload className="size-4" />
-              Select mmproj (optional)
+              {t('settings.model.selectMmproj')}
             </Button>
           </div>
           <input ref={ggufInputRef} type="file" accept=".gguf" className="hidden" onChange={onSelectGguf} />
           <input ref={mmprojInputRef} type="file" accept=".gguf" className="hidden" onChange={onSelectMmproj} />
-          <p className="text-muted-foreground text-xs">GGUF: {ggufFile?.name ?? 'Not selected'}</p>
-          <p className="text-muted-foreground text-xs">mmproj: {mmprojFile?.name ?? 'Not selected'}</p>
+          <p className="text-muted-foreground text-xs">GGUF: {ggufFile?.name ?? t('settings.model.notSelected')}</p>
+          <p className="text-muted-foreground text-xs">mmproj: {mmprojFile?.name ?? t('settings.model.notSelected')}</p>
           <Input
             value={displayName}
             onChange={(event) => onDisplayNameChange(event.target.value)}
-            placeholder="Display name (optional)"
+            placeholder={t('settings.model.displayNamePlaceholder')}
             disabled={isWorking}
           />
           <Button onClick={onUploadModel} disabled={isWorking || !ggufFile}>
             {isWorking ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-            Upload Model
+            {t('settings.model.uploadModel')}
           </Button>
         </div>
       ) : null}
@@ -410,6 +447,7 @@ export function AssistantRuntimeSettingsSection({
   onToolResultLimitCurrentChange,
   onToolResultLimitHistoryChange,
 }: AssistantRuntimeSettingsSectionProps) {
+  const { t } = useTranslation()
   const contextLengthIndex = Math.max(0, ASSISTANT_CONTEXT_LENGTH.OPTIONS.findIndex((value) => value === contextLength))
   const toolResultLimitCurrentIndex = Math.max(0, ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.findIndex((value) => value === toolResultLimitCurrent))
   const toolResultLimitHistoryIndex = Math.max(0, ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS.findIndex((value) => value === toolResultLimitHistory))
@@ -419,40 +457,40 @@ export function AssistantRuntimeSettingsSection({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Cpu className="size-5" />
-          Assistant Runtime
+          {t('settings.model.assistantRuntime')}
         </CardTitle>
         <CardDescription>
-          Tune local context windows and tool-result context passed back to the model.
+          {t('settings.model.assistantRuntimeDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="rounded-lg border p-4 space-y-4">
           <RuntimeSlider
-            title="Context length"
-            description="Larger values improve memory, but increase RAM usage and may slow generation on some models."
+            title={t('settings.model.contextLength')}
+            description={t('settings.model.contextLengthDescription')}
             value={contextLength}
             index={contextLengthIndex}
             options={ASSISTANT_CONTEXT_LENGTH.OPTIONS}
             onValueChange={onContextLengthChange}
           />
           <RuntimeSlider
-            title="Tool response context"
-            description="Latest tool result characters passed into the next model step."
+            title={t('settings.model.toolResponseContext')}
+            description={t('settings.model.toolResponseContextDescription')}
             value={toolResultLimitCurrent}
             index={toolResultLimitCurrentIndex}
             options={ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS}
             onValueChange={onToolResultLimitCurrentChange}
           />
           <RuntimeSlider
-            title="Tool history context"
-            description="Older tool result characters rebuilt into later prompts."
+            title={t('settings.model.toolHistoryContext')}
+            description={t('settings.model.toolHistoryContextDescription')}
             value={toolResultLimitHistory}
             index={toolResultLimitHistoryIndex}
             options={ASSISTANT_TOOL_RESULT_LIMITS.OPTIONS}
             onValueChange={onToolResultLimitHistoryChange}
           />
           <div className="rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-            Changes apply on the next assistant request. If the local runtime is already running, it will restart with the new context length automatically.
+            {t('settings.model.runtimeRestartNotice')}
           </div>
         </div>
       </CardContent>
@@ -497,15 +535,16 @@ function RuntimeSlider({
 }
 
 export function McpConfigSection() {
+  const { t } = useTranslation()
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MCP size={20} className="shrink-0" />
-          MCP Client Configuration
+          {t('settings.model.mcpClientConfiguration')}
         </CardTitle>
         <CardDescription>
-          Configure TalkToFigma Desktop with your preferred MCP client
+          {t('settings.model.mcpClientConfigurationDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -524,22 +563,23 @@ export function ServerInfoSection({
   onCopyStdioPath: () => void
   onPreviewMigration: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Link2 className="size-5" />
-          Server Information
+          {t('settings.model.serverInformation')}
         </CardTitle>
-        <CardDescription>MCP server connection details</CardDescription>
+        <CardDescription>{t('settings.model.serverInformationDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div className="flex flex-col gap-2 p-3 bg-muted rounded-lg">
           <div className="flex items-center gap-2">
             <MCP size={16} className="shrink-0 text-muted-foreground" />
             <div className="flex-1">
-              <p className="font-medium">MCP Server Path</p>
-              <p className="text-muted-foreground text-xs">stdio transport (spawned by clients)</p>
+              <p className="font-medium">{t('settings.model.mcpServerPath')}</p>
+              <p className="text-muted-foreground text-xs">{t('settings.model.stdioTransport')}</p>
             </div>
             <Button
               size="sm"
@@ -558,8 +598,8 @@ export function ServerInfoSection({
           <div className="flex items-center gap-2">
             <Figma size={16} className="shrink-0 text-muted-foreground" />
             <div>
-              <p className="font-medium">WebSocket Bridge</p>
-              <p className="text-muted-foreground text-xs">For Figma plugin communication</p>
+              <p className="font-medium">{t('settings.model.websocketBridge')}</p>
+              <p className="text-muted-foreground text-xs">{t('settings.model.websocketBridgeDescription')}</p>
             </div>
           </div>
           <code className="bg-background px-2 py-1 rounded text-xs">ws://localhost:3055</code>
@@ -568,12 +608,12 @@ export function ServerInfoSection({
           <div className="flex items-center gap-2">
             <AlertTriangle size={16} className="shrink-0 text-muted-foreground" />
             <div>
-              <p className="font-medium">SSE Migration</p>
-              <p className="text-muted-foreground text-xs">Legacy SSE connection guide</p>
+              <p className="font-medium">{t('settings.model.legacySse')}</p>
+              <p className="text-muted-foreground text-xs">{t('settings.model.legacySseDescription')}</p>
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={onPreviewMigration}>
-            Preview
+            {t('common.preview')}
           </Button>
         </div>
       </CardContent>

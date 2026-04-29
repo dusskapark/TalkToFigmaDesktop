@@ -7,6 +7,7 @@
 import { autoUpdater, BrowserWindow, dialog, app } from 'electron';
 import log from 'electron-log';
 import { getUpdateCapabilities } from './distribution';
+import { t } from '../i18n';
 
 // Configure logging
 log.transports.file.level = 'info';
@@ -72,10 +73,10 @@ export function initializeUpdater() {
       if (focusedWindow) {
         dialog.showMessageBox(focusedWindow, {
           type: 'error' as const,
-          title: 'Update Error',
-          message: 'Failed to check for updates.',
+          title: t('native.updater.updateErrorTitle'),
+          message: t('native.updater.updateErrorMessage'),
           detail: err.message,
-          buttons: ['OK']
+          buttons: [t('common.ok')]
         });
       }
       isManualCheck = false;
@@ -103,9 +104,9 @@ export function initializeUpdater() {
       if (focusedWindow) {
         dialog.showMessageBox(focusedWindow, {
           type: 'info' as const,
-          title: 'No Updates',
-          message: 'Current version is up-to-date.',
-          buttons: ['OK']
+          title: t('native.updater.noUpdatesTitle'),
+          message: t('native.updater.noUpdatesMessage'),
+          buttons: [t('common.ok')]
         });
       }
       isManualCheck = false;
@@ -120,10 +121,10 @@ export function initializeUpdater() {
     if (focusedWindow) {
       dialog.showMessageBox(focusedWindow, {
         type: 'info' as const,
-        buttons: ['Restart', 'Later'],
-        title: 'Application Update',
+        buttons: [t('common.restart'), t('common.later')],
+        title: t('native.updater.applicationUpdateTitle'),
         message: process.platform === 'win32' ? releaseNotes : releaseName,
-        detail: 'A new version has been downloaded. Restart the application to apply the updates.',
+        detail: t('native.updater.updateDownloadedDetail'),
       }).then(({ response }) => {
         if (response === 0) {
           autoUpdater.quitAndInstall();
@@ -157,8 +158,8 @@ export function checkForUpdates(manual = false) {
     if (manual) {
       dialog.showMessageBox({
         type: 'info',
-        title: 'Development Mode',
-        message: 'Update checks are only available in the packaged application.'
+        title: t('native.updater.developmentModeTitle'),
+        message: t('native.updater.developmentModeMessage')
       });
     }
     return;
@@ -176,9 +177,9 @@ export function checkForUpdates(manual = false) {
     if (manual) {
       dialog.showMessageBox({
         type: 'info',
-        title: 'Update In Progress',
-        message: 'An update is being downloaded.',
-        detail: 'Please wait for the download to complete. You will be prompted to restart when ready.'
+        title: t('native.updater.updateInProgressTitle'),
+        message: t('native.updater.updateInProgressMessage'),
+        detail: t('native.updater.updateInProgressDetail')
       });
     }
     return;
@@ -191,10 +192,10 @@ export function checkForUpdates(manual = false) {
       if (focusedWindow) {
         dialog.showMessageBox(focusedWindow, {
           type: 'info',
-          buttons: ['Restart', 'Later'],
-          title: 'Update Ready',
-          message: 'An update has been downloaded.',
-          detail: 'Restart the application to apply the updates.'
+          buttons: [t('common.restart'), t('common.later')],
+          title: t('native.updater.updateReadyTitle'),
+          message: t('native.updater.updateReadyMessage'),
+          detail: t('native.updater.updateReadyDetail')
         }).then(({ response }) => {
           if (response === 0) {
             autoUpdater.quitAndInstall();

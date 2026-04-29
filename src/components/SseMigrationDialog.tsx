@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, ArrowRight, Settings } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface SseMigrationDialogProps {
   open: boolean
@@ -24,6 +25,7 @@ interface SseMigrationDialogProps {
 }
 
 export function SseMigrationDialog({ open, onClose, onGoToSettings }: SseMigrationDialogProps) {
+  const { t } = useTranslation()
   const handleGoToSettings = () => {
     onClose()
     onGoToSettings?.()
@@ -35,46 +37,46 @@ export function SseMigrationDialog({ open, onClose, onGoToSettings }: SseMigrati
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="size-5 text-amber-500 shrink-0" />
-            Legacy Configuration Detected
+            {t('sseMigration.title')}
           </DialogTitle>
           <DialogDescription>
-            An MCP client is trying to connect using the old SSE method, which is no longer supported.
+            {t('sseMigration.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* What happened */}
           <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-sm">
-            <p className="font-medium text-amber-600 dark:text-amber-400 mb-1">What happened?</p>
+            <p className="font-medium text-amber-600 dark:text-amber-400 mb-1">{t('sseMigration.whatHappened')}</p>
             <p className="text-muted-foreground">
-              A connection was attempted to{' '}
+              {t('sseMigration.happenedBodyPrefix')}
               <code className="bg-muted px-1 py-0.5 rounded text-xs">
                 http://127.0.0.1:3056/sse
               </code>
-              . This SSE transport has been replaced by stdio.
+              {t('sseMigration.happenedBodySuffix')}
             </p>
           </div>
 
           {/* Steps */}
           <div className="space-y-2">
-            <p className="text-sm font-medium">How to fix</p>
+            <p className="text-sm font-medium">{t('sseMigration.howToFix')}</p>
             <div className="space-y-2 text-sm text-muted-foreground">
               <div className="flex items-start gap-2">
                 <ArrowRight className="size-4 mt-0.5 shrink-0 text-primary" />
                 <span>
-                  Open <strong>Settings</strong> and find the MCP Client Configuration section
+                  {t('sseMigration.step1')}
                 </span>
               </div>
               <div className="flex items-start gap-2">
                 <ArrowRight className="size-4 mt-0.5 shrink-0 text-primary" />
                 <span>
-                  Remove any existing SSE-based configuration from your MCP client
+                  {t('sseMigration.step2')}
                 </span>
               </div>
               <div className="flex items-start gap-2">
                 <ArrowRight className="size-4 mt-0.5 shrink-0 text-primary" />
                 <span>
-                  Follow the new stdio setup instructions for your client (Cursor, Claude Code, etc.)
+                  {t('sseMigration.step3')}
                 </span>
               </div>
             </div>
@@ -83,11 +85,11 @@ export function SseMigrationDialog({ open, onClose, onGoToSettings }: SseMigrati
 
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Dismiss
+            {t('common.dismiss')}
           </Button>
           <Button onClick={handleGoToSettings} className="gap-2">
             <Settings className="size-4" />
-            Go to Settings
+            {t('sseMigration.goToSettings')}
           </Button>
         </DialogFooter>
       </DialogContent>

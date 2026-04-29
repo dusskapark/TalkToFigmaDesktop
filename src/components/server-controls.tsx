@@ -7,6 +7,7 @@ import { RainbowButton } from "@/components/ui/rainbow-button"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
 import { MCP, Figma } from '@lobehub/icons'
 import { cn } from "@/lib/utils"
+import { useTranslation } from "react-i18next"
 
 export interface ServerStatus {
     websocket: 'running' | 'stopped'
@@ -46,6 +47,7 @@ export function ServerControls({
     disabled = false,
     error = null,
 }: ServerControlsProps) {
+    const { t } = useTranslation()
     // In stdio mode, MCP is always available, so server control is WebSocket-based
     const wsRunning = status.websocket === 'running'
 
@@ -109,10 +111,10 @@ export function ServerControls({
                                     disabled={disabled}
                                 >
                                     <Square className="size-4 mr-2" />
-                                    Stop Server
+                                    {t('server.stopServer')}
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Stop server</TooltipContent>
+                            <TooltipContent>{t('server.stopServer')}</TooltipContent>
                         </Tooltip>
                     ) : (
                         <Tooltip>
@@ -123,10 +125,10 @@ export function ServerControls({
                                     disabled={disabled}
                                 >
                                     <Play className="size-4 mr-2" />
-                                    Start Server
+                                    {t('server.startServer')}
                                 </RainbowButton>
                             </TooltipTrigger>
-                            <TooltipContent>Start server</TooltipContent>
+                            <TooltipContent>{t('server.startServer')}</TooltipContent>
                         </Tooltip>
                     )}
 
@@ -144,7 +146,7 @@ export function ServerControls({
                                     <RefreshCw className="size-4" />
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Restart server</TooltipContent>
+                            <TooltipContent>{t('server.restartServer')}</TooltipContent>
                         </Tooltip>
                     )}
                 </div>
@@ -156,7 +158,7 @@ export function ServerControls({
                         <div className="flex items-center gap-2">
                             <Figma size={16} className="shrink-0 text-muted-foreground" />
                             <div className="flex flex-col">
-                                <span className="text-xs font-medium">Figma Bridge</span>
+                                <span className="text-xs font-medium">{t('server.figmaBridge')}</span>
                                 <span className="text-[10px] text-muted-foreground">WebSocket :3055</span>
                             </div>
                         </div>
@@ -167,7 +169,7 @@ export function ServerControls({
                                 status.websocket === 'running' && "bg-green-500 hover:bg-green-500"
                             )}
                         >
-                            {status.websocket === 'running' ? 'ON' : 'OFF'}
+                            {status.websocket === 'running' ? t('server.statusRunning') : t('server.statusStopped')}
                         </Badge>
                     </div>
 
@@ -176,9 +178,11 @@ export function ServerControls({
                         <div className="flex items-center gap-2">
                             <MCP size={16} className="shrink-0 text-muted-foreground" />
                             <div className="flex flex-col">
-                                <span className="text-xs font-medium">MCP Bridge</span>
+                                <span className="text-xs font-medium">{t('server.mcpBridge')}</span>
                                 <span className="text-[10px] text-muted-foreground">
-                                    stdio {status.mcpClientCount !== undefined ? `(${status.mcpClientCount} ${status.mcpClientCount === 1 ? 'client' : 'clients'})` : ''}
+                                    {status.mcpClientCount !== undefined
+                                        ? t('server.stdioClients', { count: status.mcpClientCount })
+                                        : t('server.stdioNoClients')}
                                 </span>
                             </div>
                         </div>
@@ -189,7 +193,7 @@ export function ServerControls({
                                 status.mcp === 'running' && "bg-green-500 hover:bg-green-500"
                             )}
                         >
-                            {status.mcp === 'running' ? 'ON' : 'OFF'}
+                            {status.mcp === 'running' ? t('server.statusRunning') : t('server.statusStopped')}
                         </Badge>
                     </div>
                 </div>
@@ -197,7 +201,7 @@ export function ServerControls({
                 {/* Status Summary - Simple description only */}
                 <div className="text-center mt-2">
                     <p className="text-xs text-muted-foreground">
-                        {error ? error : (wsRunning ? 'Server running' : 'Server stopped')}
+                        {error ? error : (wsRunning ? t('server.runningSummary') : t('server.stoppedSummary'))}
                     </p>
                 </div>
             </div>

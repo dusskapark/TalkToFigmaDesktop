@@ -10,17 +10,20 @@ import { Separator } from '@/components/ui/separator'
 import { ExternalLink } from 'lucide-react'
 import { ConfigCodeBlock } from './ConfigCodeBlock'
 import type { McpClient } from '@/lib/mcp/client-configs'
-import { formatClientConfig } from '@/lib/mcp/client-configs'
+import { formatClientConfig, getClientInstructions } from '@/lib/mcp/client-configs'
 import { useToast } from '@/hooks/use-toast'
 import { BRANDING } from '@/shared/branding'
+import { useTranslation } from 'react-i18next'
 
 interface McpClientItemProps {
   client: McpClient
 }
 
 export function McpClientItem({ client }: McpClientItemProps) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const [stdioPath, setStdioPath] = useState<string>('<STDIO_SERVER_PATH>')
+  const instructions = getClientInstructions(client, t)
 
   useEffect(() => {
     // Load actual stdio server path
@@ -57,8 +60,8 @@ export function McpClientItem({ client }: McpClientItemProps) {
 
     window.location.href = deepLink
     toast({
-      title: 'Opening Cursor...',
-      description: 'Follow the prompts in Cursor to complete installation',
+      title: t('mcp.openingCursorTitle'),
+      description: t('mcp.openingCursorDescription'),
     })
   }
 
@@ -100,9 +103,9 @@ export function McpClientItem({ client }: McpClientItemProps) {
           <div className="space-y-3">
             <ConfigCodeBlock config={getConfigWithPath()} />
             <Separator />
-            <h4 className="text-sm font-semibold mb-2">Deep Link</h4>
+            <h4 className="text-sm font-semibold mb-2">{t('mcp.deepLink')}</h4>
             <p className="text-sm text-muted-foreground">
-              Click the button to open Cursor and install {BRANDING.mcpServerName}
+              {t('mcp.clickToOpenCursor', { serverName: BRANDING.mcpServerName })}
             </p>
             <Button
               onClick={handleDeepLink}
@@ -110,7 +113,7 @@ export function McpClientItem({ client }: McpClientItemProps) {
               disabled={stdioPath === '<STDIO_SERVER_PATH>' || stdioPath === '<ERROR_LOADING_PATH>'}
             >
               <ExternalLink className="mr-2 size-4" />
-              Install in Cursor
+              {t('mcp.installInCursor')}
             </Button>
           </div>
         </>
@@ -147,9 +150,9 @@ export function McpClientItem({ client }: McpClientItemProps) {
 
       {/* Instructions */}
       <div>
-        <h4 className="text-sm font-semibold mb-2">Instructions</h4>
+        <h4 className="text-sm font-semibold mb-2">{t('mcp.instructions')}</h4>
         <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
-          {client.instructions.map((instruction, index) => (
+          {instructions.map((instruction, index) => (
             <li key={index}>{instruction}</li>
           ))}
         </ol>

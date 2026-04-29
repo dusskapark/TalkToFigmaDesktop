@@ -6,9 +6,11 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/co
 import { TutorialDialog } from '@/components/TutorialDialog'
 import { SseMigrationDialog } from '@/components/SseMigrationDialog'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { LocaleProvider } from '@/components/LocaleProvider'
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler'
 import { Button } from '@/components/ui/button'
 import { Copy, Check, RotateCcw, ListTree } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 // Pages
 import { TerminalPage } from '@/pages/Terminal'
@@ -16,28 +18,21 @@ import { SettingsPage } from '@/pages/Settings'
 import { HelpPage } from '@/pages/Help'
 import { AssistantPage } from '@/pages/Assistant'
 
-const pageLabels: Record<PageId, string> = {
-  assistant: 'Assistant',
-  terminal: 'Terminal',
-  settings: 'Settings',
-  help: 'Help',
-}
-
 // Track page view when page changes
-function usePageViewTracking(currentPage: PageId) {
+function usePageViewTracking(currentPage: PageId, title: string) {
   const prevPage = useRef<PageId | null>(null)
 
   useEffect(() => {
     // Only track if page actually changed (not on initial mount)
     if (prevPage.current !== null && prevPage.current !== currentPage) {
       window.electron?.analytics?.track('pageView', {
-        title: pageLabels[currentPage],
+        title,
         location: `talktofigma://${currentPage}`,
         path: `/${currentPage}`,
       })
     }
     prevPage.current = currentPage
-  }, [currentPage])
+  }, [currentPage, title])
 }
 
 async function copyTextToClipboard(text: string) {
@@ -66,7 +61,8 @@ async function copyTextToClipboard(text: string) {
   }
 }
 
-function App() {
+function AppContent() {
+  const { t } = useTranslation()
   const [currentPage, setCurrentPage] = useState<PageId>('terminal')
   const [serverStatus, setServerStatus] = useState({
     websocket: 'stopped' as 'running' | 'stopped',
@@ -81,8 +77,15 @@ function App() {
   const [migrationDialogOpen, setMigrationDialogOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  const pageLabels: Record<PageId, string> = {
+    assistant: t('app.nav.assistant'),
+    terminal: t('app.nav.terminal'),
+    settings: t('app.nav.settings'),
+    help: t('app.nav.help'),
+  }
+
   // Track page view changes
-  usePageViewTracking(currentPage)
+  usePageViewTracking(currentPage, pageLabels[currentPage])
 
   // Set initial welcome message
   useEffect(() => {
@@ -362,20 +365,20 @@ Ready to bridge Figma and AI tools via MCP
                     size="icon"
                     onClick={handleClearLogs}
                     className="w-9 h-9"
-                    title="Clear logs"
+                    title={t('app.header.clearLogs')}
                   >
                     <RotateCcw className="h-4 w-4" />
-                    <span className="sr-only">Clear terminal logs</span>
+                    <span className="sr-only">{t('app.header.clearTerminalLogs')}</span>
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={handleCopyLogs}
                     className="w-9 h-9"
-                    title="Copy last 200 lines"
+                    title={t('app.header.copyLast200Lines')}
                   >
                     {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    <span className="sr-only">Copy terminal logs</span>
+                    <span className="sr-only">{t('app.header.copyTerminalLogs')}</span>
                   </Button>
                 </>
               )}
@@ -384,13 +387,13 @@ Ready to bridge Figma and AI tools via MCP
                   variant="ghost"
                   size="icon"
                   className="w-9 h-9"
-                  title="Open threads"
+                  title={t('app.header.openThreads')}
                   onClick={() => {
                     window.dispatchEvent(new CustomEvent('assistant:open-threads'))
                   }}
                 >
                   <ListTree className="h-4 w-4" />
-                  <span className="sr-only">Open assistant threads</span>
+                  <span className="sr-only">{t('app.header.openAssistantThreads')}</span>
                 </Button>
               )}
               <AnimatedThemeToggler
@@ -404,6 +407,14 @@ Ready to bridge Figma and AI tools via MCP
         </SidebarInset>
       </SidebarProvider>
     </ThemeProvider>
+  )
+}
+
+function App() {
+  return (
+    <LocaleProvider>
+      <AppContent />
+    </LocaleProvider>
   )
 }
 

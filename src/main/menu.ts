@@ -9,6 +9,7 @@ import { checkForUpdates } from './utils/updater';
 import { getUpdateCapabilities } from './utils/distribution';
 import { TalkToFigmaServerManager } from './server/TalkToFigmaServerManager';
 import { TalkToFigmaService } from './server/TalkToFigmaService';
+import { t } from './i18n';
 
 /**
  * Create application menu
@@ -42,18 +43,29 @@ export function createMenu(mainWindow: BrowserWindow, requestQuit: () => void | 
     return status.websocket.running;
   };
 
+  const buildEditMenu = (): MenuItemConstructorOptions[] => ([
+    { label: t('common.undo'), role: 'undo' },
+    { label: t('common.redo'), role: 'redo' },
+    { type: 'separator' },
+    { label: t('common.cut'), role: 'cut' },
+    { label: t('common.copy'), role: 'copy' },
+    { label: t('common.paste'), role: 'paste' },
+    { type: 'separator' },
+    { label: t('common.selectAll'), role: 'selectAll' },
+  ]);
+
   const template: MenuItemConstructorOptions[] = [
     // App Menu (macOS only)
     ...(isMac
       ? [{
           label: app.name,
           submenu: [
-            { role: 'about' },
+            { label: `${t('common.about')} ${app.name}`, role: 'about' },
             { type: 'separator' },
             ...(canCheckForUpdates
               ? [
                   {
-                    label: 'Check for Updates...',
+                    label: t('common.checkForUpdates'),
                     click: () => {
                       checkForUpdates(true);
                     }
@@ -61,14 +73,14 @@ export function createMenu(mainWindow: BrowserWindow, requestQuit: () => void | 
                   { type: 'separator' as const },
                 ]
               : []),
-            { role: 'services' },
+            { label: t('common.services'), role: 'services' },
             { type: 'separator' },
-            { role: 'hide' },
-            { role: 'hideOthers' },
-            { role: 'unhide' },
+            { label: t('common.hide'), role: 'hide' },
+            { label: t('common.hideOthers'), role: 'hideOthers' },
+            { label: t('common.unhide'), role: 'unhide' },
             { type: 'separator' },
             {
-              label: `Quit ${app.name}`,
+              label: `${t('common.quit')} ${app.name}`,
               accelerator: 'Command+Q',
               click: () => {
                 void requestQuit();
@@ -81,10 +93,10 @@ export function createMenu(mainWindow: BrowserWindow, requestQuit: () => void | 
     // File Menu (Windows/Linux)
     ...(!isMac
       ? [{
-          label: 'File',
+          label: t('native.menu.file'),
           submenu: [
             {
-              label: 'Quit',
+              label: t('common.quit'),
               accelerator: 'Alt+F4',
               click: () => {
                 void requestQuit();
@@ -95,14 +107,17 @@ export function createMenu(mainWindow: BrowserWindow, requestQuit: () => void | 
       : []),
 
     // Edit Menu (clipboard shortcuts: cut/copy/paste/select all)
-    { role: 'editMenu' },
+    {
+      label: t('native.menu.edit'),
+      submenu: buildEditMenu(),
+    },
 
     // Server Menu (server control)
     {
-      label: 'Server',
+      label: t('native.menu.server'),
       submenu: [
         {
-          label: getServerStatus() ? 'Stop Server' : 'Start Server',
+          label: getServerStatus() ? t('server.stopServer') : t('server.startServer'),
           accelerator: 'CmdOrCtrl+S',
           click: async () => {
             const isRunning = getServerStatus();
@@ -115,7 +130,7 @@ export function createMenu(mainWindow: BrowserWindow, requestQuit: () => void | 
           }
         },
         {
-          label: 'Restart Server',
+          label: t('server.restartServer'),
           accelerator: 'CmdOrCtrl+R',
           click: async () => {
             await service.stopAll({ showNotification: false });
@@ -127,26 +142,26 @@ export function createMenu(mainWindow: BrowserWindow, requestQuit: () => void | 
 
     // View Menu (page navigation + window controls)
     {
-      label: 'View',
+      label: t('native.menu.view'),
       submenu: [
         {
-          label: 'Assistant',
+          label: t('app.nav.assistant'),
           accelerator: 'CmdOrCtrl+1',
           click: () => showPage('assistant')
         },
         { type: 'separator' },
         {
-          label: 'Terminal',
+          label: t('app.nav.terminal'),
           accelerator: 'CmdOrCtrl+2',
           click: () => showPage('terminal')
         },
         {
-          label: 'Settings',
+          label: t('app.nav.settings'),
           accelerator: 'CmdOrCtrl+3',
           click: () => showPage('settings')
         },
         {
-          label: 'Help',
+          label: t('app.nav.help'),
           accelerator: 'CmdOrCtrl+4',
           click: () => showPage('help')
         },
@@ -163,30 +178,30 @@ export function createMenu(mainWindow: BrowserWindow, requestQuit: () => void | 
 
     // Window Menu (window management)
     {
-      label: 'Window',
+      label: t('native.menu.window'),
       submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
+        { label: t('common.minimize'), role: 'minimize' },
+        { label: t('common.zoom'), role: 'zoom' },
         ...(isMac
           ? [
               { type: 'separator' as const },
-              { role: 'front' as const }
+              { label: t('common.bringAllToFront'), role: 'front' as const }
             ]
           : [
-              { role: 'close' as const }
+              { label: t('common.closeWindow'), role: 'close' as const }
             ])
       ] as MenuItemConstructorOptions[]
     },
 
     // Help Menu
     {
-      role: 'help',
+      label: t('native.menu.help'),
       submenu: [
         // Windows/Linux: Add "Check for Updates" to Help menu
         ...(!isMac && canCheckForUpdates
           ? [
               {
-                label: 'Check for Updates...',
+                label: t('common.checkForUpdates'),
                 click: () => {
                   checkForUpdates(true);
                 }
@@ -195,26 +210,26 @@ export function createMenu(mainWindow: BrowserWindow, requestQuit: () => void | 
             ]
           : []),
         {
-          label: 'Learn More',
+          label: t('native.menu.learnMore'),
           click: async () => {
             await shell.openExternal('https://github.com/grab/TalkToFigmaDesktop');
           }
         },
         {
-          label: 'Documentation',
+          label: t('native.menu.documentation'),
           click: async () => {
             await shell.openExternal('https://github.com/grab/TalkToFigmaDesktop/blob/main/README.md');
           }
         },
         {
-          label: 'MCP Protocol Docs',
+          label: t('native.menu.mcpProtocolDocs'),
           click: async () => {
             await shell.openExternal('https://modelcontextprotocol.io');
           }
         },
         { type: 'separator' },
         {
-          label: 'Report Issue',
+          label: t('common.reportIssue'),
           click: async () => {
             await shell.openExternal('https://github.com/grab/TalkToFigmaDesktop/issues');
           }

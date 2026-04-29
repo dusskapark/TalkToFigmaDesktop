@@ -5,8 +5,9 @@
  */
 
 import { ipcMain, IpcMainInvokeEvent } from 'electron';
-import { IPC_CHANNELS } from '../../shared/constants';
+import { IPC_CHANNELS, STORE_KEYS } from '../../shared/constants';
 import { createLogger } from '../utils/logger';
+import { TalkToFigmaService } from '../server/TalkToFigmaService';
 import * as storeUtils from '../utils/store';
 
 const logger = createLogger('IPC:settings');
@@ -20,5 +21,9 @@ export function registerSettingsIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.SETTINGS_SET, async (_event: IpcMainInvokeEvent, key: string, value: unknown) => {
     logger.debug('IPC: settings:set', { key, value });
     storeUtils.setSetting(key, value);
+
+    if (key === STORE_KEYS.APP_LOCALE) {
+      TalkToFigmaService.getInstance().refreshNativeUi();
+    }
   });
 }

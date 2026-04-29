@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { useToast } from '@/hooks/use-toast'
 import { SseMigrationDialog } from '@/components/SseMigrationDialog'
 import type { AssistantRuntimeBackend, AssistantRuntimeStatus } from '@/shared/types'
 import { ASSISTANT_CONTEXT_LENGTH, ASSISTANT_TOOL_RESULT_LIMITS, STORE_KEYS } from '@/shared/constants'
 import {
+  LanguageSettingsSection,
   AssistantRuntimeSettingsSection,
   McpConfigSection,
   ModelSettingsSection,
@@ -17,6 +19,7 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const [stdioPath, setStdioPath] = useState<string>('Loading...')
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
@@ -75,8 +78,8 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
     if (stdioPath && stdioPath !== 'Loading...' && stdioPath !== 'Error loading path') {
       navigator.clipboard.writeText(stdioPath)
       toast({
-        title: 'Copied to clipboard',
-        description: 'Stdio server path has been copied',
+        title: t('settings.toast.copiedToClipboardTitle'),
+        description: t('settings.toast.stdioServerPathCopied'),
       })
     }
   }
@@ -89,8 +92,8 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
       if (!result.success) {
         toast({
           variant: 'destructive',
-          title: 'Model download failed',
-          description: result.error ?? 'Retry is required.',
+          title: t('settings.toast.modelDownloadFailed'),
+          description: result.error ?? t('settings.toast.retryRequired'),
         })
       }
       await refreshModelStatus()
@@ -104,8 +107,8 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
     if (!ggufPath) {
       toast({
         variant: 'destructive',
-        title: 'GGUF file required',
-        description: 'Select a GGUF file before uploading.',
+        title: t('settings.toast.ggufFileRequired'),
+        description: t('settings.toast.selectGgufBeforeUploading'),
       })
       return
     }
@@ -121,15 +124,15 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
       if (!result.success) {
         toast({
           variant: 'destructive',
-          title: 'Upload failed',
-          description: result.error ?? 'Could not upload model files.',
+          title: t('settings.toast.uploadFailed'),
+          description: result.error ?? t('settings.toast.uploadFailedDescription'),
         })
         return
       }
 
       toast({
-        title: 'Model uploaded',
-        description: 'The model was registered successfully.',
+        title: t('settings.toast.modelUploaded'),
+        description: t('settings.toast.modelRegistered'),
       })
       setGgufFile(null)
       setMmprojFile(null)
@@ -149,14 +152,14 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
       if (!result.success) {
         toast({
           variant: 'destructive',
-          title: 'Activation failed',
-          description: result.error ?? 'Could not activate the model.',
+          title: t('settings.toast.activationFailed'),
+          description: result.error ?? t('settings.toast.activationFailedDescription'),
         })
         return
       }
       toast({
-        title: 'Model activated',
-        description: `${modelId} is now the active default model.`,
+        title: t('settings.toast.modelActivated'),
+        description: t('settings.toast.activeDefaultModelDescription', { modelId }),
       })
       await refreshModelStatus()
     } finally {
@@ -171,8 +174,8 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
       if (!result.success) {
         toast({
           variant: 'destructive',
-          title: 'Runtime change failed',
-          description: result.error ?? 'Could not change the Assistant runtime.',
+          title: t('settings.toast.runtimeChangeFailed'),
+          description: result.error ?? t('settings.toast.runtimeChangeFailedDescription'),
         })
         return
       }
@@ -185,13 +188,13 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
   const copyPullCommand = (modelId: string) => {
     navigator.clipboard.writeText(`ollama pull ${modelId}`)
     toast({
-      title: 'Copied to clipboard',
-      description: 'Ollama pull command has been copied.',
+      title: t('settings.toast.copiedToClipboardTitle'),
+      description: t('settings.toast.ollamaPullCopied'),
     })
   }
 
   const handleDeleteModel = async (modelId: string) => {
-    const confirmed = window.confirm(`Delete model ${modelId}?`)
+    const confirmed = window.confirm(t('settings.toast.confirmDeleteModel', { modelId }))
     if (!confirmed) return
 
     setIsWorking(true)
@@ -200,14 +203,14 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
       if (!result.success) {
         toast({
           variant: 'destructive',
-          title: 'Delete failed',
-          description: result.error ?? 'Could not delete model.',
+          title: t('settings.toast.deleteFailed'),
+          description: result.error ?? t('settings.toast.deleteFailedDescription'),
         })
         return
       }
       toast({
-        title: 'Model deleted',
-        description: `${modelId} was removed.`,
+        title: t('settings.toast.modelDeleted'),
+        description: t('settings.toast.modelRemovedDescription', { modelId }),
       })
       await refreshModelStatus()
     } finally {
@@ -246,6 +249,7 @@ export function SettingsPage({ onNavigateToSettings }: SettingsPageProps) {
 
   return (
     <div className="space-y-6 w-full pb-6">
+      <LanguageSettingsSection />
       <ModelSettingsSection
         runtimeStatus={runtimeStatus}
         displayName={displayName}

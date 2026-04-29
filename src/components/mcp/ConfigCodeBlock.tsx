@@ -7,12 +7,14 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Copy, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface ConfigCodeBlockProps {
   config: string
 }
 
 export function ConfigCodeBlock({ config }: ConfigCodeBlockProps) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
@@ -35,6 +37,8 @@ export function ConfigCodeBlock({ config }: ConfigCodeBlockProps) {
         variant="ghost"
         size="icon"
         className="absolute top-2 right-2 size-8"
+        aria-label={copied ? t('common.copied') : t('common.copy')}
+        title={copied ? t('common.copied') : t('common.copy')}
       >
         {copied ? (
           <Check className="size-4 text-green-500" />

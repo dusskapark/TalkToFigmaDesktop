@@ -11,6 +11,7 @@ import type { AssistantMessagePart, AssistantMessagePartTool, AssistantRunLog, T
 import { classifyToolSafety } from './ToolSafetyPolicy';
 import type { LlamaToolCall, LlamaToolDefinition } from './AssistantLlamaTypes';
 import { AssistantMessageSerializer } from './AssistantMessageSerializer';
+import { t } from '../i18n';
 
 interface ExecuteToolCallOptions {
   runId: string;
@@ -225,11 +226,11 @@ export class AssistantToolExecutor {
             ok: true,
             result: {
               status: 'channel_required',
-              title: 'No channel joined',
-              message: 'Call join_channel first with the target Figma channel, then retry.',
+              title: t('native.assistantTool.channelRequiredTitle'),
+              message: t('native.assistantTool.channelRequiredMessage'),
               nextActions: [
-                'Call join_channel with your target channel ID',
-                `Retry ${toolName}`,
+                t('native.assistantTool.nextActionJoinChannel'),
+                t('native.assistantTool.retryTool', { toolName }),
               ],
             },
           };
@@ -243,12 +244,12 @@ export class AssistantToolExecutor {
             ok: true,
             result: {
               status: 'figma_disconnected',
-              title: 'Figma plugin is not connected',
-              message: 'Please start the server and open TalkToFigma plugin in Figma.',
+              title: t('native.assistantTool.figmaDisconnectedTitle'),
+              message: t('native.assistantTool.figmaDisconnectedMessage'),
               nextActions: [
-                'Start TalkToFigma server',
-                'Open TalkToFigma plugin in Figma',
-                'Retry your request',
+                t('native.assistantTool.startServer'),
+                t('native.assistantTool.openPlugin'),
+                t('native.assistantTool.retryRequest'),
               ],
             },
           };

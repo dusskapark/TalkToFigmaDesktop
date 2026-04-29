@@ -24,6 +24,7 @@ import {
   SidebarGroupContent,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { useTranslation } from "react-i18next"
 
 // Logo images from public directory (reusing tray icons)
 const logoDark = "tray_dark.png"
@@ -36,14 +37,7 @@ type NavItem = {
   icon: LucideIcon
 }
 
-const navItems = [
-  { id: 'assistant', title: 'Assistant', icon: Bot },
-  { id: 'terminal', title: 'Terminal', icon: Terminal },
-  { id: 'settings', title: 'Settings', icon: Settings },
-  { id: 'help', title: 'Help', icon: HelpCircle },
-] satisfies readonly NavItem[]
-
-export type PageId = typeof navItems[number]['id']
+export type PageId = NavItem['id']
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   currentPage: PageId
@@ -73,8 +67,15 @@ export function AppSidebar({
   onFigmaLogout,
   ...props
 }: AppSidebarProps) {
+  const { t } = useTranslation()
   const { state } = useSidebar()
   const isCollapsed = state === "collapsed"
+  const navItems: readonly NavItem[] = [
+    { id: 'assistant', title: t('app.nav.assistant'), icon: Bot },
+    { id: 'terminal', title: t('app.nav.terminal'), icon: Terminal },
+    { id: 'settings', title: t('app.nav.settings'), icon: Settings },
+    { id: 'help', title: t('app.nav.help'), icon: HelpCircle },
+  ]
 
   return (
     <Sidebar variant="inset" collapsible="icon" {...props}>
@@ -99,7 +100,7 @@ export function AppSidebar({
                 {!isCollapsed && (
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">TalkToFigma</span>
-                    <span className="truncate text-xs text-muted-foreground">Figma ↔ MCP Bridge</span>
+                    <span className="truncate text-xs text-muted-foreground">{t('app.brand.bridge')}</span>
                   </div>
                 )}
               </div>
@@ -124,7 +125,7 @@ export function AppSidebar({
       <SidebarContent>
         {/* Navigation */}
         <SidebarGroup>
-          {!isCollapsed && <SidebarGroupLabel>Navigation</SidebarGroupLabel>}
+          {!isCollapsed && <SidebarGroupLabel>{t('accessibility.sidebar')}</SidebarGroupLabel>}
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
@@ -152,8 +153,8 @@ export function AppSidebar({
             email: figmaUser.email,
             avatar: figmaUser.avatar || '',
           } : {
-            name: 'Not Connected',
-            email: 'Click to connect Figma',
+            name: t('user.disconnected'),
+            email: t('user.clickToConnectFigma'),
             avatar: '',
           }}
           onLogin={onFigmaLogin}

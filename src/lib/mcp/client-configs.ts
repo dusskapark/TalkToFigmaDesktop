@@ -186,6 +186,79 @@ export function getComingSoonClient(): McpClient | undefined {
   return MCP_CLIENTS.comingSoon
 }
 
+type Translator = (key: string, options?: Record<string, unknown>) => string
+
+export function getClientDescription(client: McpClient, t: Translator): string {
+  switch (client.id) {
+    case 'cursor':
+      return t('mcp.clients.cursor.description')
+    case 'claude-code':
+      return t('mcp.clients.claudeCode.description')
+    case 'codex':
+      return t('mcp.clients.codex.description')
+    case 'vscode':
+      return t('mcp.clients.vscode.description')
+    case 'antigravity':
+      return t('mcp.clients.antigravity.description')
+    case 'coming-soon':
+      return t('mcp.clients.comingSoon.description')
+    default:
+      return client.description ?? ''
+  }
+}
+
+export function getClientInstructions(client: McpClient, t: Translator): string[] {
+  switch (client.id) {
+    case 'cursor':
+      return [
+        t('mcp.clients.cursor.instructions.0'),
+        t('mcp.clients.cursor.instructions.1'),
+        t('mcp.clients.cursor.instructions.2'),
+        t('mcp.clients.cursor.instructions.3'),
+        t('mcp.clients.cursor.instructions.4', { serverName: BRANDING.mcpServerName }),
+      ]
+    case 'claude-code':
+      return [
+        t('mcp.clients.claudeCode.instructions.0'),
+        t('mcp.clients.claudeCode.instructions.1'),
+        t('mcp.clients.claudeCode.instructions.2'),
+        t('mcp.clients.claudeCode.instructions.3'),
+        t('mcp.clients.claudeCode.instructions.4'),
+      ]
+    case 'codex':
+      return [
+        t('mcp.clients.codex.instructions.0'),
+        t('mcp.clients.codex.instructions.1'),
+        t('mcp.clients.codex.instructions.2'),
+        t('mcp.clients.codex.instructions.3', { serverName: BRANDING.mcpServerName }),
+        t('mcp.clients.codex.instructions.4', { serverName: BRANDING.mcpServerName }),
+      ]
+    case 'vscode':
+      return [
+        t('mcp.clients.vscode.instructions.0'),
+        t('mcp.clients.vscode.instructions.1'),
+        t('mcp.clients.vscode.instructions.2'),
+        t('mcp.clients.vscode.instructions.3'),
+        t('mcp.clients.vscode.instructions.4'),
+      ]
+    case 'antigravity':
+      return [
+        t('mcp.clients.antigravity.instructions.0'),
+        t('mcp.clients.antigravity.instructions.1'),
+        t('mcp.clients.antigravity.instructions.2'),
+        t('mcp.clients.antigravity.instructions.3'),
+        t('mcp.clients.antigravity.instructions.4'),
+      ]
+    case 'coming-soon':
+      return [
+        t('mcp.clients.comingSoon.instructions.0'),
+        t('mcp.clients.comingSoon.instructions.1'),
+      ]
+    default:
+      return client.instructions
+  }
+}
+
 /**
  * Format configuration as JSON string
  */

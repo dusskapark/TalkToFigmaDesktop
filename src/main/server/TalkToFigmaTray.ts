@@ -21,6 +21,7 @@ import { TalkToFigmaServerManager } from './TalkToFigmaServerManager';
 import { TalkToFigmaService } from './TalkToFigmaService';
 import { checkForUpdates } from '../utils/updater';
 import { getUpdateCapabilities } from '../utils/distribution';
+import { t } from '../i18n';
 
 const logger = createLogger('Tray');
 
@@ -70,7 +71,7 @@ export class TalkToFigmaTray {
     try {
       const icon = this.getIcon();
       this.tray = new Tray(icon);
-      this.tray.setToolTip('TalkToFigma Desktop - Figma Automation');
+      this.tray.setToolTip(t('native.tray.tooltip'));
       this.updateMenu();
 
       logger.info('[TalkToFigma Tray] ✅ System tray created');
@@ -125,26 +126,26 @@ export class TalkToFigmaTray {
 
       // ═══ WINDOW & PAGES ═══
       {
-        label: 'Assistant',
+        label: t('app.nav.assistant'),
         click: () => this.showPage('assistant'),
       },
       {
-        label: 'Terminal',
+        label: t('app.nav.terminal'),
         click: () => this.showPage('terminal'),
       },
       {
-        label: 'Settings',
+        label: t('app.nav.settings'),
         click: () => this.showPage('settings'),
       },
       {
-        label: 'Help',
+        label: t('app.nav.help'),
         click: () => this.showPage('help'),
       },
       { type: 'separator' },
 
       // ═══ SERVER CONTROLS ═══
       {
-        label: wsRunning ? '⬤ Stop Server' : '○ Start Server',
+        label: wsRunning ? t('native.tray.stopServer') : t('native.tray.startServer'),
         click: async () => {
           if (wsRunning) {
             await this.stopAll();
@@ -158,7 +159,7 @@ export class TalkToFigmaTray {
       ...(canCheckForUpdates
         ? [
             {
-              label: 'Check for Updates...',
+              label: t('common.checkForUpdates'),
               click: () => checkForUpdates(true),
             },
             { type: 'separator' as const },
@@ -167,7 +168,7 @@ export class TalkToFigmaTray {
 
       // ═══ EXIT ═══
       {
-        label: 'Quit',
+        label: t('common.quit'),
         click: () => {
           void this.requestQuit();
         },

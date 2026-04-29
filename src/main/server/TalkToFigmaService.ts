@@ -7,6 +7,7 @@
 import { BrowserWindow, Notification } from 'electron';
 import { createLogger } from '../utils/logger';
 import { IPC_CHANNELS } from '../../shared/constants';
+import { t } from '../i18n';
 
 import { TalkToFigmaServerManager } from './TalkToFigmaServerManager';
 
@@ -98,6 +99,16 @@ export class TalkToFigmaService {
     }
   }
 
+  refreshNativeUi(): void {
+    if (this.trayUpdateCallback) {
+      this.trayUpdateCallback();
+    }
+
+    if (this.menuUpdateCallback) {
+      this.menuUpdateCallback();
+    }
+  }
+
   /**
    * Start all servers (WebSocket + MCP)
    */
@@ -113,8 +124,8 @@ export class TalkToFigmaService {
 
       if (options?.showNotification) {
         new Notification({
-          title: 'TalkToFigma Servers Started',
-          body: 'WebSocket and MCP servers are now running',
+          title: t('native.notifications.serversStartedTitle'),
+          body: t('native.notifications.serversStartedBody'),
         }).show();
       }
 
@@ -125,8 +136,8 @@ export class TalkToFigmaService {
 
       if (options?.showNotification) {
         new Notification({
-          title: 'Error',
-          body: `Failed to start servers: ${error instanceof Error ? error.message : String(error)}`,
+          title: t('common.error'),
+          body: t('native.notifications.failedToStartServers', { message: error instanceof Error ? error.message : String(error) }),
         }).show();
       }
 
@@ -153,8 +164,8 @@ export class TalkToFigmaService {
 
       if (options?.showNotification) {
         new Notification({
-          title: 'TalkToFigma Servers Stopped',
-          body: 'All servers have been stopped',
+          title: t('native.notifications.serversStoppedTitle'),
+          body: t('native.notifications.serversStoppedBody'),
         }).show();
       }
 
@@ -165,8 +176,8 @@ export class TalkToFigmaService {
 
       if (options?.showNotification) {
         new Notification({
-          title: 'Error',
-          body: `Failed to stop servers: ${error instanceof Error ? error.message : String(error)}`,
+          title: t('common.error'),
+          body: t('native.notifications.failedToStopServers', { message: error instanceof Error ? error.message : String(error) }),
         }).show();
       }
 
@@ -271,8 +282,8 @@ export class TalkToFigmaService {
 
       if (options?.showNotification) {
         new Notification({
-          title: 'Processes Killed',
-          body: 'All processes on ports 3055 and 3056 have been terminated',
+          title: t('native.notifications.processesKilledTitle'),
+          body: t('native.notifications.processesKilledBody'),
         }).show();
       }
 
@@ -282,8 +293,8 @@ export class TalkToFigmaService {
 
       if (options?.showNotification) {
         new Notification({
-          title: 'Error',
-          body: `Failed to kill processes: ${error instanceof Error ? error.message : String(error)}`,
+          title: t('common.error'),
+          body: t('native.notifications.failedToKillProcesses', { message: error instanceof Error ? error.message : String(error) }),
         }).show();
       }
 
@@ -307,8 +318,8 @@ export class TalkToFigmaService {
 
       if (options?.showNotification) {
         new Notification({
-          title: 'WebSocket Server Started',
-          body: 'WebSocket server is now running on port 3055',
+          title: t('native.notifications.websocketStartedTitle'),
+          body: t('native.notifications.websocketStartedBody'),
         }).show();
       }
 
@@ -318,8 +329,8 @@ export class TalkToFigmaService {
 
       if (options?.showNotification) {
         new Notification({
-          title: 'Error',
-          body: `Failed to start WebSocket server: ${error instanceof Error ? error.message : String(error)}`,
+          title: t('common.error'),
+          body: t('native.notifications.failedToStartWebsocket', { message: error instanceof Error ? error.message : String(error) }),
         }).show();
       }
 
@@ -343,8 +354,8 @@ export class TalkToFigmaService {
 
       if (options?.showNotification) {
         new Notification({
-          title: 'WebSocket Server Stopped',
-          body: 'WebSocket server has been stopped',
+          title: t('native.notifications.websocketStoppedTitle'),
+          body: t('native.notifications.websocketStoppedBody'),
         }).show();
       }
 
@@ -372,8 +383,8 @@ export class TalkToFigmaService {
 
     if (options?.showNotification) {
       new Notification({
-        title: 'MCP Server (stdio)',
-        body: 'MCP server is spawned by clients when needed',
+        title: t('native.notifications.mcpServerTitle'),
+        body: t('native.notifications.mcpServerSpawned'),
       }).show();
     }
 
@@ -394,12 +405,11 @@ export class TalkToFigmaService {
 
     if (options?.showNotification) {
       new Notification({
-        title: 'MCP Server (stdio)',
-        body: 'MCP server is managed by clients',
+        title: t('native.notifications.mcpServerTitle'),
+        body: t('native.notifications.mcpServerManaged'),
       }).show();
     }
 
     return { success: true };
   }
 }
-

@@ -21,6 +21,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { useTranslation } from "react-i18next"
 
 export function NavUser({
   user,
@@ -35,8 +36,9 @@ export function NavUser({
   onLogin?: () => void
   onLogout?: () => void
 }) {
+  const { t } = useTranslation()
   const { isMobile } = useSidebar()
-  const isConnected = user.name !== 'Not Connected'
+  const isConnected = user.name !== t('user.disconnected')
 
   return (
     <SidebarMenu>
@@ -69,12 +71,12 @@ export function NavUser({
             {isConnected ? (
               <DropdownMenuItem onClick={onLogout}>
                 <LogOut />
-                Disconnect
+                {t('user.disconnect')}
               </DropdownMenuItem>
             ) : (
               <DropdownMenuItem onClick={onLogin}>
                 <LogIn />
-                Connect Figma
+                {t('user.connectFigma')}
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>

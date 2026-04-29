@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { HelpCircle, ExternalLink, FileText, Github, BookOpen, MessageCircle, Download } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 export function HelpPage() {
+    const { t } = useTranslation()
     const [canCheckForUpdates, setCanCheckForUpdates] = useState(false)
 
     useEffect(() => {
@@ -44,16 +46,15 @@ export function HelpPage() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <BookOpen className="size-5" />
-                        Getting Started
+                        {t('help.gettingStarted')}
                     </CardTitle>
                     <CardDescription>
-                        Learn how to use TalkToFigma Desktop with our interactive tutorial
+                        {t('help.gettingStartedDescription')}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                        Follow our step-by-step tutorial to get started with TalkToFigma Desktop.
-                        Learn how to connect Figma, configure MCP, and control your designs with AI.
+                        {t('help.gettingStartedBody')}
                     </p>
                     <Button
                         variant="default"
@@ -65,7 +66,7 @@ export function HelpPage() {
                         }}
                     >
                         <BookOpen className="size-4 mr-2" />
-                        Open Tutorial
+                        {t('help.openTutorial')}
                     </Button>
                 </CardContent>
             </Card>
@@ -75,10 +76,10 @@ export function HelpPage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Download className="size-5" />
-                            Updates
+                            {t('help.updates')}
                         </CardTitle>
                         <CardDescription>
-                            Keep your app up to date with the latest features and fixes
+                            {t('help.updatesDescription')}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-2">
@@ -88,7 +89,7 @@ export function HelpPage() {
                             onClick={checkForUpdates}
                         >
                             <Download className="size-4 mr-2" />
-                            Check for Updates
+                            {t('common.checkForUpdates')}
                         </Button>
                     </CardContent>
                 </Card>
@@ -99,10 +100,10 @@ export function HelpPage() {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <MessageCircle className="size-5" />
-                        Get Help
+                        {t('help.getHelp')}
                     </CardTitle>
                     <CardDescription>
-                        Need assistance? Report issues or ask questions
+                        {t('help.getHelpDescription')}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -112,7 +113,7 @@ export function HelpPage() {
                         onClick={() => openExternal('https://github.com/grab/TalkToFigmaDesktop/issues')}
                     >
                         <HelpCircle className="size-4 mr-2" />
-                        Report an Issue
+                        {t('common.reportIssue')}
                         <ExternalLink className="size-3 ml-auto" />
                     </Button>
                 </CardContent>
@@ -121,8 +122,8 @@ export function HelpPage() {
             {/* Resources */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Resources</CardTitle>
-                    <CardDescription>Documentation and community links</CardDescription>
+                    <CardTitle>{t('help.resources')}</CardTitle>
+                    <CardDescription>{t('help.resourcesDescription')}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                     <Button
@@ -131,7 +132,7 @@ export function HelpPage() {
                         onClick={() => openExternal('https://github.com/grab/TalkToFigmaDesktop')}
                     >
                         <Github className="size-4 mr-2" />
-                        GitHub Repository
+                        {t('help.githubRepository')}
                         <ExternalLink className="size-3 ml-auto" />
                     </Button>
                     <Button
@@ -140,7 +141,7 @@ export function HelpPage() {
                         onClick={() => openExternal('https://modelcontextprotocol.io')}
                     >
                         <FileText className="size-4 mr-2" />
-                        MCP Protocol Documentation
+                        {t('help.mcpProtocolDocs')}
                         <ExternalLink className="size-3 ml-auto" />
                     </Button>
                     <Button
@@ -149,7 +150,7 @@ export function HelpPage() {
                         onClick={() => openExternal('https://www.figma.com/plugin-docs/')}
                     >
                         <FileText className="size-4 mr-2" />
-                        Figma Plugin API Docs
+                        {t('help.figmaPluginApiDocs')}
                         <ExternalLink className="size-3 ml-auto" />
                     </Button>
                 </CardContent>
